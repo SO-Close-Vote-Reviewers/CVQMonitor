@@ -11,9 +11,20 @@ namespace SOCVRDotNet
 {
     public class ReviewItem
     {
+        /// <summary>
+        /// The ID number of the review task.
+        /// </summary>
         public int ID { get; private set; }
         //public Question Post { get; private set; }
+
+        /// <summary>
+        /// If null, this task was NOT an audit, otherwise this task was an audit (true if the user passed, otherwise false).
+        /// </summary>
         public bool? AuditPassed { get; private set; }
+
+        /// <summary>
+        /// A list of ReviewResults holding data regarding all the users's actions taken.
+        /// </summary>
         public List<ReviewResult> Results { get; private set; }
 
 

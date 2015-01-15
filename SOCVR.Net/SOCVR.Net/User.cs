@@ -12,7 +12,14 @@ namespace SOCVRDotNet
     {
         private int currentPageNo;
 
+        /// <summary>
+        /// The ID number of the user.
+        /// </summary>
         public int ID { get; private set; }
+
+        /// <summary>
+        /// A list of ReviewItems that have been previously loaded.
+        /// </summary>
         public List<ReviewItem> Reviews { get; private set; }
 
 
@@ -27,6 +34,10 @@ namespace SOCVRDotNet
 
 
 
+        /// <summary>
+        /// Scraps a user's activity tab for CV review data.
+        /// </summary>
+        /// <param name="pageCount">The number of pages to scrap.</param>
         public void LoadMoreReviews(int pageCount = 10)
         {
             for (var i = 1; i < pageCount; i++, currentPageNo++)
