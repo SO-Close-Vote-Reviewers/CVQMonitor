@@ -43,7 +43,6 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Anwer.cs" />
     <Compile Include="Post.cs" />
     <Compile Include="PostRetriever.cs" />
     <Compile Include="ReviewAction.cs" />
