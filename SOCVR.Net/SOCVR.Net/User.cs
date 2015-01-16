@@ -10,7 +10,7 @@ namespace SOCVRDotNet
 {
     public class User
     {
-        private int currentPageNo;
+        private int currentPageNo = 1;
 
         /// <summary>
         /// The ID number of the user.
@@ -40,7 +40,7 @@ namespace SOCVRDotNet
         /// <param name="pageCount">The number of pages to scrap.</param>
         public void LoadMoreReviews(int pageCount = 10)
         {
-            for (var i = 1; i < pageCount; i++, currentPageNo++)
+            for (var i = 0; i < pageCount; i++, currentPageNo++)
             {
                 var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString("https://stackoverflow.com/ajax/users/tab/" + ID + "?tab=activity&sort=reviews&page=" + currentPageNo);
                 var dom = CQ.Create(pageHtml);
@@ -55,6 +55,18 @@ namespace SOCVRDotNet
                     Reviews.Add(new ReviewItem(int.Parse(reviewID)));
                 }
             }
+        }
+
+        /// <summary>
+        /// Clears the Reviews list and repopulates it with "fresh" review data.
+        /// </summary>
+        /// <param name="pageCount">The number of pages to scrap for the fresh review data.</param>
+        public void RefreshReviews(int pageCount = 10)
+        {
+            Reviews.Clear();
+            currentPageNo = 1;
+
+            LoadMoreReviews(pageCount);
         }
     }
 }
