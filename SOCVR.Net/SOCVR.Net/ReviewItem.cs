@@ -15,7 +15,6 @@ namespace SOCVRDotNet
         /// The ID number of the review task.
         /// </summary>
         public int ID { get; private set; }
-        //public Question Post { get; private set; }
 
         /// <summary>
         /// If null, this task was NOT an audit, otherwise this task was an audit (true if the user passed, otherwise false).
@@ -27,6 +26,10 @@ namespace SOCVRDotNet
         /// </summary>
         public List<ReviewResult> Results { get; private set; }
 
+        /// <summary>
+        /// A list of tags that the reviewed questions was tagged with.
+        /// </summary>
+        public List<string> Tags { get; private set; }
 
 
         public ReviewItem(int reviewID)
@@ -43,6 +46,7 @@ namespace SOCVRDotNet
             }
 
             PopulateResults(res);
+            PopulateTags(res);
             CheckAudit(res);
         }
 
@@ -98,6 +102,24 @@ namespace SOCVRDotNet
                 }
 
                 Results.Add(new ReviewResult(username, action, timeStamp));
+            }
+        }
+
+        private void PopulateTags(string postResponse)
+        {
+            Tags = new List<string>();
+
+            dynamic json = JsonConvert.DeserializeObject(postResponse);
+            var html = (string)json["content"];
+            var dom = CQ.Create(html);
+
+            foreach (var tag in dom[".post-taglist a"])
+            {
+                var t = tag.Attributes["href"];
+
+                t = t.Remove(0, t.LastIndexOf('/') + 1);
+
+                Tags.Add(t);
             }
         }
 
