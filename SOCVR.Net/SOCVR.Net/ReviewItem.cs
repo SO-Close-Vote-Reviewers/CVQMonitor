@@ -4,7 +4,7 @@ using System.Collections.Specialized;
 using System.Net;
 using System.Text;
 using CsQuery;
-using Newtonsoft.Json;
+using JsonFx.Json;
 
 
 namespace SOCVRDotNet
@@ -56,7 +56,7 @@ namespace SOCVRDotNet
         {
             Results = new List<ReviewResult>();
 
-            dynamic json = JsonConvert.DeserializeObject(postResponse);
+            dynamic json = new JsonReader().Read(postResponse);
             var html = (string)json["instructions"];
             var dom = CQ.Create(html);
 
@@ -109,7 +109,7 @@ namespace SOCVRDotNet
         {
             Tags = new List<string>();
 
-            dynamic json = JsonConvert.DeserializeObject(postResponse);
+            dynamic json = new JsonReader().Read(postResponse);
             var html = (string)json["content"];
             var dom = CQ.Create(html);
 
@@ -125,7 +125,7 @@ namespace SOCVRDotNet
 
         private void CheckAudit(string postResponse)
         {
-            dynamic json = JsonConvert.DeserializeObject(postResponse);
+            dynamic json = new JsonReader().Read(postResponse);
             var html = (string)json["instructions"];
             var dom = CQ.Create(html);
 
