@@ -56,7 +56,7 @@ namespace SOCVRDotNet
         {
             Results = new List<ReviewResult>();
 
-            dynamic json = new JsonReader().Read(postResponse);
+            var json = new JsonReader().Read<Dictionary<string, object>>(postResponse);
             var html = (string)json["instructions"];
             var dom = CQ.Create(html);
 
@@ -109,7 +109,7 @@ namespace SOCVRDotNet
         {
             Tags = new List<string>();
 
-            dynamic json = new JsonReader().Read(postResponse);
+            var json = new JsonReader().Read<Dictionary<string, object>>(postResponse);
             var html = (string)json["content"];
             var dom = CQ.Create(html);
 
@@ -125,7 +125,7 @@ namespace SOCVRDotNet
 
         private void CheckAudit(string postResponse)
         {
-            dynamic json = new JsonReader().Read(postResponse);
+            var json = new JsonReader().Read<Dictionary<string, object>>(postResponse);
             var html = (string)json["instructions"];
             var dom = CQ.Create(html);
 

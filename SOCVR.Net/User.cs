@@ -42,7 +42,7 @@ namespace SOCVRDotNet
         {
             for (var i = 0; i < pageCount; i++, currentPageNo++)
             {
-                var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString("https://stackoverflow.com/ajax/users/tab/" + ID + "?tab=activity&sort=reviews&page=" + currentPageNo);
+                var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString("http://stackoverflow.com/ajax/users/tab/" + ID + "?tab=activities&sort=reviews&page=" + currentPageNo);
                 var dom = CQ.Create(pageHtml);
 
                 foreach (var j in dom["td"])
