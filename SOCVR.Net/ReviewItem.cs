@@ -70,7 +70,7 @@ namespace SOCVRDotNet
                 {
                     if (j.Attributes["href"] != null && j.Attributes["href"].StartsWith(@"/users/"))
                     {
-                        username = j.InnerHTML;
+                        username = WebUtility.UrlDecode(j.InnerHTML);
                     }
                     else if (j.Attributes["title"] != null)
                     {
@@ -113,11 +113,11 @@ namespace SOCVRDotNet
             var html = (string)json["content"];
             var dom = CQ.Create(html);
 
-            foreach (var tag in dom[".post-taglist a"])
+            foreach (var tag in dom[".js-tab-question .post-taglist a"])
             {
                 var t = tag.Attributes["href"];
 
-                t = t.Remove(0, t.LastIndexOf('/') + 1);
+                t = WebUtility.UrlDecode(t.Remove(0, t.LastIndexOf('/') + 1));
 
                 Tags.Add(t);
             }
