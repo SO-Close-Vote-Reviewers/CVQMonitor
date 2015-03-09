@@ -68,6 +68,8 @@ namespace SOCVRDotNet
 
                 foreach (var j in i.ChildElements)
                 {
+                    if (j.Attributes["title"] == "moderator") { continue; }
+
                     if (j.Attributes["href"] != null && j.Attributes["href"].StartsWith(@"/users/"))
                     {
                         username = WebUtility.UrlDecode(j.InnerHTML);
@@ -85,13 +87,11 @@ namespace SOCVRDotNet
                                 action = ReviewAction.Close;
                                 break;
                             }
-
                             case "Leave Open":
                             {
                                 action = ReviewAction.LeaveOpen;
                                 break;
                             }
-
                             case "Edit":
                             {
                                 action = ReviewAction.Edit;
