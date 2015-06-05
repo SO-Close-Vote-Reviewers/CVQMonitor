@@ -38,13 +38,33 @@ namespace SOCVRDotNet
 
         public int UserID { get; private set; }
         public EventManager EventManager { get; private set; }
+        /// <summary>
+        /// A collection of review items completed by the user this UTC day.
+        /// </summary>
         public List<ReviewItem> TodaysCVReviews { get; private set; }
+        /// <summary>
+        /// True if the user is actively reviewing.
+        /// </summary>
         public bool IsReviewing { get; private set; }
+        /// <summary>
+        /// The duration (in minutes) of inactivity after completing
+        /// a review for the current session to be considered finished.
+        /// (Default 3 minutes.)
+        /// </summary>
+        public double IdleTimeout { get; set; }
+        /// <summary>
+        /// The duration (in minutes) of inactivity after failing
+        /// an audit for the current session to be considered finished.
+        /// (Default 1 minute.)
+        /// </summary>
+        public double AuditFailureTimeout { get; set; }
 
 
 
         public UserWatcher(int userID)
         {
+            IdleTimeout = 3;
+            AuditFailureTimeout = 1;
             UserID = userID;
             EventManager = new EventManager();
             Task.Run(() => StartWatcher());
@@ -84,10 +104,10 @@ namespace SOCVRDotNet
             GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
             {
-                if (q != ReviewQueue.CloseVotes || IsReviewing || dispose) { return; }
+                if (q != ReviewQueue.CloseVotes || IsReviewing || dispose || id != UserID) { return; }
                 IsReviewing = true;
                 var startTime = DateTime.UtcNow;
-                EventManager.CallListeners(UserEventType.StartedReviewing, id);
+                EventManager.CallListeners(UserEventType.StartedReviewing);
                 Task.Run(() => MonitorReviews(startTime));
             };
         }
@@ -114,7 +134,11 @@ namespace SOCVRDotNet
 
                 foreach (var review in pageReviews)
                 {
-                    if (sessionReviews.Contains(review) || review.Results.First(r => r.UserID == UserID).Timestamp < startTime) { continue; }
+                    if (sessionReviews.Any(r => r.ID == review.ID) ||
+                        review.Results.First(r => r.UserID == UserID).Timestamp < startTime)
+                    {
+                        continue;
+                    }
 
                     sessionReviews.Add(review);
 
@@ -130,7 +154,8 @@ namespace SOCVRDotNet
                     EventManager.CallListeners(UserEventType.ReviewedItem, review);
                 }
 
-                if (latestReview != null && latestReview.AuditPassed == false && (DateTime.UtcNow - latestTimestamp).TotalMinutes > 1)
+                if (latestReview != null && latestReview.AuditPassed == false &&
+                    (DateTime.UtcNow - latestTimestamp).TotalMinutes > AuditFailureTimeout)
                 {
                     // We can be pretty sure they've been temporarily banned.
                     endSession();
@@ -144,7 +169,7 @@ namespace SOCVRDotNet
                     return;
                 }
 
-                if ((DateTime.UtcNow - latestTimestamp).TotalMinutes > 3)
+                if ((DateTime.UtcNow - latestTimestamp).TotalMinutes > IdleTimeout)
                 {
                     // They've probably finished.
                     endSession();
@@ -171,7 +196,8 @@ namespace SOCVRDotNet
 
                     foreach (var review in pageReviews)
                     {
-                        if (review.Results.First(r => r.UserID == UserID).Timestamp.Day == DateTime.UtcNow.Day)
+                        if (review.Results.First(r => r.UserID == UserID).Timestamp.Day == DateTime.UtcNow.Day
+                            && reviews.All(r => r.ID != review.ID))
                         {
                             reviews.Add(review);
                         }
@@ -215,8 +241,10 @@ namespace SOCVRDotNet
 
                     var url = j.FirstElementChild.Attributes["href"];
                     var reviewID = url.Remove(0, url.LastIndexOf('/') + 1);
-                    var review = new ReviewItem(int.Parse(reviewID), fkey);
-                    reviews.Add(review);
+                    var id = int.Parse(reviewID);
+
+                    if (reviews.Any(r => r.ID == id)) { continue; }
+                    reviews.Add(new ReviewItem(id, fkey));
                 }
             }
             catch (Exception ex)

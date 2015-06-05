@@ -31,8 +31,9 @@ namespace SOCVRDotNet
     public static class User
     {
         /// <summary>
-        /// Scraps a user's activity tab for CV review data.
+        /// Fetches the latest close vote review data.
         /// </summary>
+        /// <param name="userID">The user ID to fetch close vote data for.</param>
         /// <param name="reviewCount">The number of reviews to fetch.</param>
         public static List<ReviewItem> FetchReviews(int userID, int reviewCount = 10)
         {
