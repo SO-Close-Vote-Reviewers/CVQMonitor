@@ -26,6 +26,7 @@ namespace SOCVRDotNet
     {
         InternalException = -1,
         ReviewedItem,
+        CompletedTag,
         PassedAudit,
         FailedAudit,
         StartedReviewing,

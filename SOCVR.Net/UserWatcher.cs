@@ -21,6 +21,7 @@
 
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -128,10 +129,13 @@ namespace SOCVRDotNet
             {
                 mre.Dispose();
                 TodaysCVReviews.AddRange(sessionReviews);
+                startTime = startTime.AddSeconds(-((latestTimestamp - startTime).Seconds / sessionReviews.Count));
                 EventManager.CallListeners(UserEventType.FinishedReviewing, startTime, latestTimestamp, sessionReviews);
                 IsReviewing = false;
             });
             ReviewItem latestReview = null;
+
+            Task.Run(() => MonitorTags());
 
             while (!dispose)
             {
@@ -181,8 +185,76 @@ namespace SOCVRDotNet
                     return;
                 }
 
-                mre.WaitOne(TimeSpan.FromSeconds(20));
+                mre.WaitOne(TimeSpan.FromSeconds(15));
             }
+        }
+
+        private void MonitorTags()
+        {
+            var reviewCount = 0;
+            var tags = new ConcurrentDictionary<string, float>();
+            var topActiveTags = new List<string>();
+            var activeTags = new List<string>();
+            var addTag = new Action<ReviewItem>(r =>
+            {
+                if (r.AuditPassed != null) { return; }
+
+                reviewCount++;
+
+                foreach (var tag in r.Tags)
+                {
+                    if (tags.ContainsKey(tag))
+                    {
+                        tags[tag]++;
+                    }
+                    else
+                    {
+                        tags[tag] = 1;
+                    }
+                }
+
+                if (topActiveTags.Count != 0 && topActiveTags.All(t => r.Tags.Contains(t)))
+                {
+                    foreach (var tag in topActiveTags)
+                    {
+                        EventManager.CallListeners(UserEventType.CompletedTag, tag);
+                    }
+                    tags.Clear();
+                    topActiveTags.Clear();
+                }
+            });
+
+            EventManager.ConnectListener(UserEventType.ReviewedItem, addTag);
+
+            while (IsReviewing)
+            {
+                Thread.Sleep(1000);
+
+                if (reviewCount < 6) { continue; }
+
+                var topThreeTags = new Dictionary<string, float>();
+                topThreeTags = tags.OrderByDescending(t => t.Value)
+                                   .TakeWhile(t => topThreeTags.Count < 3)
+                                   .ToDictionary(t => t.Key, t => t.Value);
+
+                foreach (var kv in topThreeTags)
+                {
+                    if (kv.Value >= reviewCount / 3F)
+                    {
+                        activeTags.Add(kv.Key);
+                    }
+                }
+
+                // The user is (probably) not review a specific tag,
+                // clear the current data set and keep waiting.
+                if (activeTags.Count == 0)
+                {
+                    tags.Clear();
+                    topActiveTags.Clear();
+                }
+            }
+
+            EventManager.DisconnectListener(UserEventType.ReviewedItem, addTag);
         }
 
         private List<ReviewItem> LoadTodaysReviews()
