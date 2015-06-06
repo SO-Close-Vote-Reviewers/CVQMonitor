@@ -111,7 +111,7 @@ namespace SOCVRDotNet
             {
                 if (q != ReviewQueue.CloseVotes || IsReviewing || dispose || id != UserID) { return; }
                 IsReviewing = true;
-                var startTime = DateTime.UtcNow;
+                var startTime = DateTime.UtcNow - TimeSpan.FromSeconds(2);
                 EventManager.CallListeners(UserEventType.StartedReviewing);
                 Task.Run(() => MonitorReviews(startTime));
             };
@@ -140,7 +140,7 @@ namespace SOCVRDotNet
                 foreach (var review in pageReviews)
                 {
                     if (sessionReviews.Any(r => r.ID == review.ID) ||
-                        review.Results.First(r => r.UserID == UserID).Timestamp < (startTime - TimeSpan.FromSeconds(2)))
+                        review.Results.First(r => r.UserID == UserID).Timestamp < startTime)
                     {
                         continue;
                     }
