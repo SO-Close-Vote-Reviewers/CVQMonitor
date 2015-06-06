@@ -37,34 +37,39 @@ namespace SOCVRDotNet
         private bool dispose;
 
         public int UserID { get; private set; }
+
         public EventManager EventManager { get; private set; }
+
         /// <summary>
         /// A collection of review items completed by the user this UTC day.
         /// </summary>
         public List<ReviewItem> TodaysCVReviews { get; private set; }
+
         /// <summary>
         /// True if the user is actively reviewing.
         /// </summary>
         public bool IsReviewing { get; private set; }
+
         /// <summary>
-        /// The duration (in minutes) of inactivity after completing
+        /// The duration of inactivity after completing
         /// a review for the current session to be considered finished.
         /// (Default 3 minutes.)
         /// </summary>
-        public double IdleTimeout { get; set; }
+        public TimeSpan IdleTimeout { get; set; }
+
         /// <summary>
-        /// The duration (in minutes) of inactivity after failing
+        /// The duration of inactivity after failing
         /// an audit for the current session to be considered finished.
         /// (Default 1 minute.)
         /// </summary>
-        public double AuditFailureTimeout { get; set; }
+        public TimeSpan AuditFailureTimeout { get; set; }
 
 
 
         public UserWatcher(int userID)
         {
-            IdleTimeout = 3;
-            AuditFailureTimeout = 1;
+            IdleTimeout = TimeSpan.FromMinutes(3);
+            AuditFailureTimeout = TimeSpan.FromMinutes(1);
             UserID = userID;
             EventManager = new EventManager();
             Task.Run(() => StartWatcher());
@@ -118,7 +123,7 @@ namespace SOCVRDotNet
             var reviewsAvailable = GetReviewsAvailable();
             var sessionReviews = new List<ReviewItem>();
             var fkey = User.GetFKey();
-            var latestTimestamp = DateTime.MinValue;
+            var latestTimestamp = DateTime.MaxValue;
             var endSession = new Action(() =>
             {
                 mre.Dispose();
@@ -135,7 +140,7 @@ namespace SOCVRDotNet
                 foreach (var review in pageReviews)
                 {
                     if (sessionReviews.Any(r => r.ID == review.ID) ||
-                        review.Results.First(r => r.UserID == UserID).Timestamp < startTime)
+                        review.Results.First(r => r.UserID == UserID).Timestamp < (startTime - TimeSpan.FromSeconds(2)))
                     {
                         continue;
                     }
@@ -155,7 +160,7 @@ namespace SOCVRDotNet
                 }
 
                 if (latestReview != null && latestReview.AuditPassed == false &&
-                    (DateTime.UtcNow - latestTimestamp).TotalMinutes > AuditFailureTimeout)
+                    DateTime.UtcNow - latestTimestamp > AuditFailureTimeout)
                 {
                     // We can be pretty sure they've been temporarily banned.
                     endSession();
@@ -169,7 +174,7 @@ namespace SOCVRDotNet
                     return;
                 }
 
-                if ((DateTime.UtcNow - latestTimestamp).TotalMinutes > IdleTimeout)
+                if (DateTime.UtcNow - latestTimestamp > IdleTimeout)
                 {
                     // They've probably finished.
                     endSession();
@@ -260,7 +265,7 @@ namespace SOCVRDotNet
             var doc = CQ.CreateFromUrl("http://stackoverflow.com/review/close/stats");
             var statsTable = doc.Find("table.task-stat-table");
             var cells = statsTable.Find("td");
-            var needReview = cells.ElementAt(0).FirstElementChild.InnerText;
+            var needReview = new string(cells.ElementAt(0).FirstElementChild.InnerText.Where(c => char.IsDigit(c)).ToArray());
             var reviews = 0;
 
             if (int.TryParse(needReview, out reviews))
