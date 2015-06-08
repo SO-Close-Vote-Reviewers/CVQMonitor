@@ -52,35 +52,43 @@ namespace SOCVRDotNet
         public bool IsReviewing { get; private set; }
 
         /// <summary>
-        /// The duration of inactivity after completing
-        /// a review for the current session to be considered finished.
-        /// (Default 3 minutes.)
+        /// The multiplicative factor used when determining whether
+        /// the current reviewing session has completed, based on
+        /// the duration of inactivity after completing a review.
+        /// (Default 4.)
         /// </summary>
-        public TimeSpan IdleTimeout { get; set; }
+        public float IdleFactor { get; set; }
 
         /// <summary>
-        /// The duration of inactivity after failing
-        /// an audit for the current session to be considered finished.
-        /// (Default 1 minute.)
+        /// The multiplicative factor used when determining whether
+        /// the current reviewing session has completed, based on
+        /// the duration of inactivity after failing an audit.
+        /// (Default 2.)
         /// </summary>
-        public TimeSpan AuditFailureTimeout { get; set; }
+        public float AuditFailureFactor { get; set; }
+
+        public double AvgReviewsPerMin { get; private set; }
 
 
 
-        public UserWatcher(int userID)
+        public UserWatcher(int userID, double avgReviewsPerMins = 0)
         {
-            IdleTimeout = TimeSpan.FromMinutes(3);
-            AuditFailureTimeout = TimeSpan.FromMinutes(1);
+            IdleFactor = 4;
+            AuditFailureFactor = 2;
+            AvgReviewsPerMin = avgReviewsPerMins;
             UserID = userID;
             EventManager = new EventManager();
+            TodaysCVReviews = LoadTodaysReviews();
             Task.Run(() => StartWatcher());
             Task.Run(() =>
             {
                 while (!dispose)
                 {
-                    TodaysCVReviews = LoadTodaysReviews();
                     var waitTime = (int)(24 - DateTime.UtcNow.TimeOfDay.TotalHours) * 3600 * 1000;
                     reviewsRefreshMre.WaitOne(waitTime);
+                    // Check again, since we're waiting a pretty long time.
+                    if (dispose) { return; }
+                    TodaysCVReviews = LoadTodaysReviews();
                 }
             });
         }
@@ -98,7 +106,6 @@ namespace SOCVRDotNet
             dispose = true;
 
             reviewsRefreshMre.Set();
-            reviewsRefreshMre.Dispose();
             EventManager.Dispose();
             GC.SuppressFinalize(this);
         }
@@ -112,7 +119,7 @@ namespace SOCVRDotNet
             {
                 if (q != ReviewQueue.CloseVotes || IsReviewing || dispose || id != UserID) { return; }
                 IsReviewing = true;
-                var startTime = DateTime.UtcNow - TimeSpan.FromSeconds(2);
+                var startTime = DateTime.UtcNow - TimeSpan.FromSeconds(10);
                 EventManager.CallListeners(UserEventType.StartedReviewing);
                 Task.Run(() => MonitorReviews(startTime));
             };
@@ -125,13 +132,19 @@ namespace SOCVRDotNet
             var sessionReviews = new List<ReviewItem>();
             var fkey = User.GetFKey();
             var latestTimestamp = DateTime.MaxValue;
+            var updateAvg = new Action(() =>
+            {
+                var sessionAvg = (DateTime.UtcNow - startTime).TotalMinutes / sessionReviews.Count;
+                AvgReviewsPerMin = (AvgReviewsPerMin + sessionAvg) / (AvgReviewsPerMin == 0 ? 1 : 2);
+            });
             var endSession = new Action(() =>
             {
                 mre.Dispose();
                 TodaysCVReviews.AddRange(sessionReviews);
-                startTime = startTime.AddSeconds(-((latestTimestamp - startTime).Seconds / sessionReviews.Count));
-                EventManager.CallListeners(UserEventType.FinishedReviewing, startTime, latestTimestamp, sessionReviews);
                 IsReviewing = false;
+                startTime = startTime.AddMinutes(-AvgReviewsPerMin);
+                updateAvg();
+                EventManager.CallListeners(UserEventType.FinishedReviewing, startTime, latestTimestamp, sessionReviews);
             });
             ReviewItem latestReview = null;
 
@@ -154,7 +167,9 @@ namespace SOCVRDotNet
                     // Notify audit listeners if necessary.
                     if (review.AuditPassed != null)
                     {
-                        var type = review.AuditPassed == false ? UserEventType.FailedAudit : UserEventType.PassedAudit;
+                        var type = review.AuditPassed == false
+                            ? UserEventType.FailedAudit
+                            : UserEventType.PassedAudit;
                         EventManager.CallListeners(type, review);
                     }
 
@@ -163,22 +178,24 @@ namespace SOCVRDotNet
                     EventManager.CallListeners(UserEventType.ReviewedItem, review);
                 }
 
+                updateAvg();
+
                 if (latestReview != null && latestReview.AuditPassed == false &&
-                    DateTime.UtcNow - latestTimestamp > AuditFailureTimeout)
+                    (DateTime.UtcNow - latestTimestamp).TotalMinutes > AvgReviewsPerMin * AuditFailureFactor)
                 {
                     // We can be pretty sure they've been temporarily banned.
                     endSession();
                     return;
                 }
 
-                if (sessionReviews.Count + TodaysCVReviews.Count >= (reviewsAvailable > 1000 ? 40 : 20))
+                if (sessionReviews.Count + TodaysCVReviews.Count == (reviewsAvailable > 1000 ? 40 : 20))
                 {
                     // They've ran out of reviews.
                     endSession();
                     return;
                 }
 
-                if (DateTime.UtcNow - latestTimestamp > IdleTimeout)
+                if ((DateTime.UtcNow - latestTimestamp).TotalMinutes > AvgReviewsPerMin * IdleFactor)
                 {
                     // They've probably finished.
                     endSession();
@@ -189,12 +206,16 @@ namespace SOCVRDotNet
             }
         }
 
+        /// <summary>
+        /// Warning, this method is still experimental.
+        /// </summary>
         private void MonitorTags()
         {
+            var lastTagReviewTimestamp = DateTime.MaxValue;
+            var reviewsSinceActiveTag = 0;
+            var allTags = new ConcurrentDictionary<string, float>();
+            var highestKv = new KeyValuePair<string, float>(null, -1);
             var reviewCount = 0;
-            var tags = new ConcurrentDictionary<string, float>();
-            var topActiveTags = new List<string>();
-            var activeTags = new List<string>();
             var addTag = new Action<ReviewItem>(r =>
             {
                 if (r.AuditPassed != null) { return; }
@@ -203,25 +224,34 @@ namespace SOCVRDotNet
 
                 foreach (var tag in r.Tags)
                 {
-                    if (tags.ContainsKey(tag))
+                    if (allTags.ContainsKey(tag))
                     {
-                        tags[tag]++;
+                        allTags[tag]++;
                     }
                     else
                     {
-                        tags[tag] = 1;
+                        allTags[tag] = 1;
                     }
                 }
 
-                if (topActiveTags.Count != 0 && topActiveTags.All(t => r.Tags.Contains(t)))
+                if (!string.IsNullOrEmpty(highestKv.Key))
                 {
-                    foreach (var tag in topActiveTags)
+                    if (r.Tags.Contains(highestKv.Key))
                     {
-                        EventManager.CallListeners(UserEventType.CompletedTag, tag);
+                        lastTagReviewTimestamp = r.Results.First(rr => rr.UserID == UserID).Timestamp;
+                        reviewsSinceActiveTag = 0;
                     }
-                    tags.Clear();
-                    topActiveTags.Clear();
+                    else
+                    {
+                        reviewsSinceActiveTag++;
+                    }
                 }
+            });
+            var reviewedTag = new Action(() =>
+            {
+                EventManager.CallListeners(UserEventType.ReviewedTag, highestKv, lastTagReviewTimestamp);
+                allTags[highestKv.Key] = 0;
+                highestKv = new KeyValuePair<string, float>(null, -1);
             });
 
             EventManager.ConnectListener(UserEventType.ReviewedItem, addTag);
@@ -230,27 +260,44 @@ namespace SOCVRDotNet
             {
                 Thread.Sleep(1000);
 
-                if (reviewCount < 6) { continue; }
+                if (reviewCount < 9) { continue; }
 
-                var topThreeTags = new Dictionary<string, float>();
-                topThreeTags = tags.OrderByDescending(t => t.Value)
-                                   .TakeWhile(t => topThreeTags.Count < 3)
-                                   .ToDictionary(t => t.Key, t => t.Value);
+                var tagsSum = allTags.Sum(t => t.Value);
+                var highKvs = allTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
+                var firstVal = highKvs.Values.FirstOrDefault();
 
-                foreach (var kv in topThreeTags)
+                if (highKvs.Count > 3 ||
+                    (highKvs.All(t => t.Value == firstVal) && highKvs.Count > 1) ||
+                    reviewsSinceActiveTag >= 3 ||
+                    (DateTime.UtcNow - lastTagReviewTimestamp).TotalSeconds > (60 / AvgReviewsPerMin) * 3)
                 {
-                    if (kv.Value >= reviewCount / 3F)
+                    // The data set doesn't contain enough data to determine
+                    // the actual tag being reviewed, or, the user's tag scope
+                    // is too broad for this analysis, or, the last review with
+                    // the active tag was completed > 5 * AvgSecsPerReview seconds ago (or > 5 reviews ago).
+
+                    // The user has been reviewing a tag, so they've
+                    // must likely switched to a different one (or simply stopped).
+                    if (!string.IsNullOrEmpty(highestKv.Key) && IsReviewing)
                     {
-                        activeTags.Add(kv.Key);
+                        reviewedTag();
+                    }
+
+                    continue;
+                }
+
+                var prevTag = highestKv.Key;
+                foreach (var kv in allTags)
+                {
+                    if (kv.Value > highestKv.Value)
+                    {
+                        highestKv = kv;
                     }
                 }
 
-                // The user is (probably) not review a specific tag,
-                // clear the current data set and keep waiting.
-                if (activeTags.Count == 0)
+                if (highestKv.Key != prevTag && !string.IsNullOrEmpty(prevTag))
                 {
-                    tags.Clear();
-                    topActiveTags.Clear();
+                    reviewedTag();
                 }
             }
 
