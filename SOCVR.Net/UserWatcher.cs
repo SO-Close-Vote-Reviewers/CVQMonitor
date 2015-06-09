@@ -51,6 +51,8 @@ namespace SOCVRDotNet
         /// </summary>
         public bool IsReviewing { get; private set; }
 
+        public double AvgReviewsPerMin { get; private set; }
+
         /// <summary>
         /// The multiplicative factor used when determining whether
         /// the current reviewing session has completed, based on
@@ -67,14 +69,23 @@ namespace SOCVRDotNet
         /// </summary>
         public float AuditFailureFactor { get; set; }
 
-        public double AvgReviewsPerMin { get; private set; }
+        /// <summary>
+        /// Sets whether or not to monitor/analyse the user's tag filter.
+        /// </summary>
+        public bool TagTrackingEnabled { get; set; }
 
 
 
-        public UserWatcher(int userID, double avgReviewsPerMins = 0)
+        public UserWatcher(int userID, double avgReviewsPerMins = 1)
         {
+            if (avgReviewsPerMins <= 0)
+            {
+                throw new ArgumentOutOfRangeException("avgReviewsPerMins", "'avgReviewsPerMins' must be non-negative and more than 0.");
+            }
+
             IdleFactor = 4;
             AuditFailureFactor = 2;
+            TagTrackingEnabled = true;
             AvgReviewsPerMin = avgReviewsPerMins;
             UserID = userID;
             EventManager = new EventManager();
@@ -119,8 +130,8 @@ namespace SOCVRDotNet
             {
                 if (q != ReviewQueue.CloseVotes || IsReviewing || dispose || id != UserID) { return; }
                 IsReviewing = true;
-                var startTime = DateTime.UtcNow - TimeSpan.FromSeconds(10);
-                EventManager.CallListeners(UserEventType.StartedReviewing);
+                var startTime = DateTime.UtcNow.AddSeconds(-15);
+                EventManager.CallListeners(UserEventType.ReviewingStarted);
                 Task.Run(() => MonitorReviews(startTime));
             };
         }
@@ -134,7 +145,7 @@ namespace SOCVRDotNet
             var latestTimestamp = DateTime.MaxValue;
             var updateAvg = new Action(() =>
             {
-                var sessionAvg = (DateTime.UtcNow - startTime).TotalMinutes / sessionReviews.Count;
+                var sessionAvg = sessionReviews.Count / (DateTime.UtcNow - startTime).TotalMinutes;
                 AvgReviewsPerMin = (AvgReviewsPerMin + sessionAvg) / (AvgReviewsPerMin == 0 ? 1 : 2);
             });
             var endSession = new Action(() =>
@@ -142,13 +153,17 @@ namespace SOCVRDotNet
                 mre.Dispose();
                 TodaysCVReviews.AddRange(sessionReviews);
                 IsReviewing = false;
-                startTime = startTime.AddMinutes(-AvgReviewsPerMin);
+                // Correct offset based on average.
+                startTime = startTime.AddSeconds(-((60 / AvgReviewsPerMin) - 15));
                 updateAvg();
-                EventManager.CallListeners(UserEventType.FinishedReviewing, startTime, latestTimestamp, sessionReviews);
+                EventManager.CallListeners(UserEventType.ReviewingFinished, startTime, latestTimestamp, sessionReviews);
             });
             ReviewItem latestReview = null;
 
-            Task.Run(() => MonitorTags());
+            if (TagTrackingEnabled)
+            {
+                Task.Run(() => MonitorTags());
+            }
 
             while (!dispose)
             {
@@ -168,14 +183,14 @@ namespace SOCVRDotNet
                     if (review.AuditPassed != null)
                     {
                         var type = review.AuditPassed == false
-                            ? UserEventType.FailedAudit
-                            : UserEventType.PassedAudit;
+                            ? UserEventType.AuditFailed
+                            : UserEventType.AuditPassed;
                         EventManager.CallListeners(type, review);
                     }
 
                     latestTimestamp = review.Results.First(r => r.UserID == UserID).Timestamp;
                     latestReview = review;
-                    EventManager.CallListeners(UserEventType.ReviewedItem, review);
+                    EventManager.CallListeners(UserEventType.ItemReviewed, review);
                 }
 
                 updateAvg();
@@ -211,16 +226,18 @@ namespace SOCVRDotNet
         /// </summary>
         private void MonitorTags()
         {
-            var lastTagReviewTimestamp = DateTime.MaxValue;
-            var reviewsSinceActiveTag = 0;
+            var reviewsSinceCurrentTags = 0;
             var allTags = new ConcurrentDictionary<string, float>();
-            var highestKv = new KeyValuePair<string, float>(null, -1);
+            var tagTimestamps = new ConcurrentDictionary<string, DateTime>();
+            var currentTags = new List<string>();
             var reviewCount = 0;
             var addTag = new Action<ReviewItem>(r =>
             {
                 if (r.AuditPassed != null) { return; }
 
                 reviewCount++;
+
+                var timestamp = r.Results.First(rr => rr.UserID == UserID).Timestamp;
 
                 foreach (var tag in r.Tags)
                 {
@@ -232,76 +249,81 @@ namespace SOCVRDotNet
                     {
                         allTags[tag] = 1;
                     }
+                    tagTimestamps[tag] = timestamp;
                 }
 
-                if (!string.IsNullOrEmpty(highestKv.Key))
+                if (currentTags.Count != 0)
                 {
-                    if (r.Tags.Contains(highestKv.Key))
+                    if (currentTags.Any(t => r.Tags.Contains(t)))
                     {
-                        lastTagReviewTimestamp = r.Results.First(rr => rr.UserID == UserID).Timestamp;
-                        reviewsSinceActiveTag = 0;
+                        reviewsSinceCurrentTags = 0;
                     }
                     else
                     {
-                        reviewsSinceActiveTag++;
+                        reviewsSinceCurrentTags++;
                     }
                 }
             });
-            var reviewedTag = new Action(() =>
-            {
-                EventManager.CallListeners(UserEventType.ReviewedTag, highestKv, lastTagReviewTimestamp);
-                allTags[highestKv.Key] = 0;
-                highestKv = new KeyValuePair<string, float>(null, -1);
-            });
 
-            EventManager.ConnectListener(UserEventType.ReviewedItem, addTag);
+            EventManager.ConnectListener(UserEventType.ItemReviewed, addTag);
 
             while (IsReviewing)
             {
-                Thread.Sleep(1000);
+                var rate = TimeSpan.FromSeconds((60 / AvgReviewsPerMin) / 2);
+                Thread.Sleep(rate);
 
                 if (reviewCount < 9) { continue; }
 
                 var tagsSum = allTags.Sum(t => t.Value);
                 var highKvs = allTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
-                var firstVal = highKvs.Values.FirstOrDefault();
+                var maxTag = highKvs.Max(t => t.Value);
+                var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
 
-                if (highKvs.Count > 3 ||
-                    (highKvs.All(t => t.Value == firstVal) && highKvs.Count > 1) ||
-                    reviewsSinceActiveTag >= 3 ||
-                    (DateTime.UtcNow - lastTagReviewTimestamp).TotalSeconds > (60 / AvgReviewsPerMin) * 3)
+                // They've probably moved to a different
+                // set of tags without us noticing.
+                // Reset the current data set and keep waiting.
+                //if (reviewsSinceCurrentTags >= 3 ||
+                //    DateTime.UtcNow - tagTimestamps.Values.Max() > rate)
+                //{
+                //    allTags.Clear();
+                //    tagTimestamps.Clear();
+                //    currentTags = null;
+                //    reviewCount = 0;
+                //    reviewsSinceCurrentTags = 0;
+                //    continue;
+                //}
+
+                // They've started reviewing a different tag.
+                if (topTags.Count > 3 ||
+                    reviewsSinceCurrentTags >= 3 ||
+                    topTags.Any(t => !currentTags.Contains(t)))
                 {
-                    // The data set doesn't contain enough data to determine
-                    // the actual tag being reviewed, or, the user's tag scope
-                    // is too broad for this analysis, or, the last review with
-                    // the active tag was completed > 5 * AvgSecsPerReview seconds ago (or > 5 reviews ago).
-
-                    // The user has been reviewing a tag, so they've
-                    // must likely switched to a different one (or simply stopped).
-                    if (!string.IsNullOrEmpty(highestKv.Key) && IsReviewing)
+                    while (topTags.Count > 3)
                     {
-                        reviewedTag();
+                        var oldestTag = new KeyValuePair<string, DateTime>(null, DateTime.MaxValue);
+                        foreach (var tag in topTags)
+                        {
+                            if (tagTimestamps[tag] < oldestTag.Value)
+                            {
+                                oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
+                            }
+                        }
+                        topTags.Remove(oldestTag.Key);
+                        allTags[oldestTag.Key] = 0;
                     }
 
-                    continue;
-                }
+                    EventManager.CallListeners(UserEventType.CurrentTagsChanged, currentTags, topTags);
 
-                var prevTag = highestKv.Key;
-                foreach (var kv in allTags)
-                {
-                    if (kv.Value > highestKv.Value)
+                    var oldTags = currentTags.Where(t => !topTags.Contains(t));
+                    foreach (var tag in oldTags)
                     {
-                        highestKv = kv;
+                        allTags[tag] = 0;
                     }
                 }
-
-                if (highestKv.Key != prevTag && !string.IsNullOrEmpty(prevTag))
-                {
-                    reviewedTag();
-                }
+                currentTags = topTags;
             }
 
-            EventManager.DisconnectListener(UserEventType.ReviewedItem, addTag);
+            EventManager.DisconnectListener(UserEventType.ItemReviewed, addTag);
         }
 
         private List<ReviewItem> LoadTodaysReviews()
