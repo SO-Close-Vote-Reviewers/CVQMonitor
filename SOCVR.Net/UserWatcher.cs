@@ -229,7 +229,7 @@ namespace SOCVRDotNet
             var reviewsSinceCurrentTags = 0;
             var allTags = new ConcurrentDictionary<string, float>();
             var tagTimestamps = new ConcurrentDictionary<string, DateTime>();
-            var currentTags = new List<string>();
+            var prevTags = new List<string>();
             var reviewCount = 0;
             var addTag = new Action<ReviewItem>(r =>
             {
@@ -252,9 +252,9 @@ namespace SOCVRDotNet
                     tagTimestamps[tag] = timestamp;
                 }
 
-                if (currentTags.Count != 0)
+                if (prevTags.Count != 0)
                 {
-                    if (currentTags.Any(t => r.Tags.Contains(t)))
+                    if (prevTags.Any(t => r.Tags.Contains(t)))
                     {
                         reviewsSinceCurrentTags = 0;
                     }
@@ -278,6 +278,7 @@ namespace SOCVRDotNet
                 var highKvs = allTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
                 var maxTag = highKvs.Max(t => t.Value);
                 var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
+                var avgNoiseFloor = allTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
 
                 // They've probably moved to a different
                 // set of tags without us noticing.
@@ -296,7 +297,7 @@ namespace SOCVRDotNet
                 // They've started reviewing a different tag.
                 if (topTags.Count > 3 ||
                     reviewsSinceCurrentTags >= 3 ||
-                    topTags.Any(t => !currentTags.Contains(t)))
+                    topTags.Any(t => !prevTags.Contains(t)))
                 {
                     while (topTags.Count > 3)
                     {
@@ -309,18 +310,27 @@ namespace SOCVRDotNet
                             }
                         }
                         topTags.Remove(oldestTag.Key);
-                        allTags[oldestTag.Key] = 0;
                     }
 
-                    EventManager.CallListeners(UserEventType.CurrentTagsChanged, currentTags, topTags);
+                    List<string> finishedTags;
 
-                    var oldTags = currentTags.Where(t => !topTags.Contains(t));
-                    foreach (var tag in oldTags)
+                    if (reviewsSinceCurrentTags >= 3)
                     {
-                        allTags[tag] = 0;
+                        finishedTags = prevTags;
+                    }
+                    else
+                    {
+                        finishedTags = prevTags.Where(t => !topTags.Contains(t)).ToList();
+                    }
+
+                    EventManager.CallListeners(UserEventType.CurrentTagsChanged, finishedTags);
+
+                    foreach (var tag in finishedTags)
+                    {
+                        allTags[tag] = avgNoiseFloor;
                     }
                 }
-                currentTags = topTags;
+                prevTags = topTags;
             }
 
             EventManager.DisconnectListener(UserEventType.ItemReviewed, addTag);
