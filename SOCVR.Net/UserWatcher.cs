@@ -97,9 +97,8 @@ namespace SOCVRDotNet
                 {
                     var waitTime = (int)(24 - DateTime.UtcNow.TimeOfDay.TotalHours) * 3600 * 1000;
                     reviewsRefreshMre.WaitOne(waitTime);
-                    // Check again, since we're waiting a pretty long time.
-                    if (dispose) { return; }
-                    TodaysCVReviews = LoadTodaysReviews();
+                    while (IsReviewing && !dispose) { Thread.Sleep(1000); }
+                    TodaysCVReviews.Clear();
                 }
             });
         }
@@ -155,7 +154,6 @@ namespace SOCVRDotNet
                 IsReviewing = false;
                 // Correct offset based on average.
                 startTime = startTime.AddSeconds(-((60 / AvgReviewsPerMin) - 15));
-                updateAvg();
                 EventManager.CallListeners(UserEventType.ReviewingFinished, startTime, latestTimestamp, sessionReviews);
             });
             ReviewItem latestReview = null;
@@ -188,15 +186,15 @@ namespace SOCVRDotNet
                         EventManager.CallListeners(type, review);
                     }
 
+                    updateAvg();
+
                     latestTimestamp = review.Results.First(r => r.UserID == UserID).Timestamp;
                     latestReview = review;
                     EventManager.CallListeners(UserEventType.ItemReviewed, review);
                 }
 
-                updateAvg();
-
                 if (latestReview != null && latestReview.AuditPassed == false &&
-                    (DateTime.UtcNow - latestTimestamp).TotalMinutes > AvgReviewsPerMin * AuditFailureFactor)
+                    (DateTime.UtcNow - latestTimestamp).TotalSeconds > (60 / AvgReviewsPerMin) * AuditFailureFactor)
                 {
                     // We can be pretty sure they've been temporarily banned.
                     endSession();
@@ -210,7 +208,7 @@ namespace SOCVRDotNet
                     return;
                 }
 
-                if ((DateTime.UtcNow - latestTimestamp).TotalMinutes > AvgReviewsPerMin * IdleFactor)
+                if ((DateTime.UtcNow - latestTimestamp).TotalSeconds > (60 / AvgReviewsPerMin) * IdleFactor)
                 {
                     // They've probably finished.
                     endSession();
