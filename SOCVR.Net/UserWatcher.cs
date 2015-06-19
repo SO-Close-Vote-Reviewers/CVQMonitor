@@ -153,6 +153,7 @@ namespace SOCVRDotNet
                 var latestTimestamp = DateTime.MaxValue;
                 var updateAvg = new Action(() =>
                 {
+                    if (sessionReviews.Count < 3) { return; }
                     var sessionAvg = sessionReviews.Count / (DateTime.UtcNow - startTime).TotalMinutes;
                     AvgReviewsPerMin = (AvgReviewsPerMin + sessionAvg) / 2;
                 });
@@ -202,17 +203,17 @@ namespace SOCVRDotNet
                         EventManager.CallListeners(UserEventType.ItemReviewed, review);
                     }
 
-                    if (latestReview != null && latestReview.AuditPassed == false &&
-                        (DateTime.UtcNow - latestTimestamp).TotalSeconds > (60 / AvgReviewsPerMin) * AuditFailureFactor)
+                    if (sessionReviews.Count + TodaysCVReviews.Count == (reviewsAvailable > 1000 ? 40 : 20))
                     {
-                        // We can be pretty sure they've been temporarily banned.
+                        // They've ran out of reviews.
                         endSession();
                         return;
                     }
 
-                    if (sessionReviews.Count + TodaysCVReviews.Count == (reviewsAvailable > 1000 ? 40 : 20))
+                    if (latestReview != null && latestReview.AuditPassed == false &&
+                        (DateTime.UtcNow - latestTimestamp).TotalSeconds > (60 / AvgReviewsPerMin) * AuditFailureFactor)
                     {
-                        // They've ran out of reviews.
+                        // We can be pretty sure they've been temporarily banned.
                         endSession();
                         return;
                     }
@@ -243,7 +244,7 @@ namespace SOCVRDotNet
                 var reviewsSinceCurrentTags = 0;
                 var allTags = new ConcurrentDictionary<string, float>();
                 var tagTimestamps = new ConcurrentDictionary<string, DateTime>();
-                var prevTags = new List<string>();
+                List<string> prevTags = null;
                 var reviewCount = 0;
                 var addTag = new Action<ReviewItem>(r =>
                 {
@@ -266,7 +267,7 @@ namespace SOCVRDotNet
                         tagTimestamps[tag] = timestamp;
                     }
 
-                    if (prevTags.Count != 0)
+                    if (prevTags != null && prevTags.Count != 0)
                     {
                         if (prevTags.Any(t => r.Tags.Contains(t)))
                         {
@@ -281,32 +282,29 @@ namespace SOCVRDotNet
 
                 EventManager.ConnectListener(UserEventType.ItemReviewed, addTag);
 
+                Task.Run(() =>
+                {
+
+                });
+
                 while (IsReviewing)
                 {
                     var rate = TimeSpan.FromSeconds((60 / AvgReviewsPerMin) / 2);
                     Thread.Sleep(rate);
 
+                    // NOT ENOUGH DATAZ (insert "y u no ..." meme here).
                     if (reviewCount < 9) { continue; }
 
                     var tagsSum = allTags.Sum(t => t.Value);
                     var highKvs = allTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
+
+                    // Not enough (accurate) data to continue analysis.
+                    if (highKvs.Count == 0) { continue; }
+
                     var maxTag = highKvs.Max(t => t.Value);
                     var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
                     var avgNoiseFloor = allTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
-
-                    // They've probably moved to a different
-                    // set of tags without us noticing.
-                    // Reset the current data set and keep waiting.
-                    //if (reviewsSinceCurrentTags >= 3 ||
-                    //    DateTime.UtcNow - tagTimestamps.Values.Max() > rate)
-                    //{
-                    //    allTags.Clear();
-                    //    tagTimestamps.Clear();
-                    //    currentTags = null;
-                    //    reviewCount = 0;
-                    //    reviewsSinceCurrentTags = 0;
-                    //    continue;
-                    //}
+                    prevTags = prevTags ?? topTags;
 
                     // They've started reviewing a different tag.
                     if (topTags.Count > 3 ||
@@ -323,6 +321,7 @@ namespace SOCVRDotNet
                                     oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
                                 }
                             }
+                            allTags[oldestTag.Key] = avgNoiseFloor;
                             topTags.Remove(oldestTag.Key);
                         }
 
@@ -343,8 +342,9 @@ namespace SOCVRDotNet
                         {
                             allTags[tag] = avgNoiseFloor;
                         }
+
+                        prevTags = finishedTags;
                     }
-                    prevTags = topTags;
                 }
 
                 EventManager.DisconnectListener(UserEventType.ItemReviewed, addTag);
