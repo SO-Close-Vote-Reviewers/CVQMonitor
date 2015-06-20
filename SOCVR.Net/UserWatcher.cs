@@ -282,11 +282,6 @@ namespace SOCVRDotNet
 
                 EventManager.ConnectListener(UserEventType.ItemReviewed, addTag);
 
-                Task.Run(() =>
-                {
-
-                });
-
                 while (IsReviewing)
                 {
                     var rate = TimeSpan.FromSeconds((60 / AvgReviewsPerMin) / 2);
@@ -343,7 +338,9 @@ namespace SOCVRDotNet
                             allTags[tag] = avgNoiseFloor;
                         }
 
-                        prevTags = finishedTags;
+                        // I think that should fix the bug.
+                        prevTags = null; //finishedTags;
+                        reviewsSinceCurrentTags = 0;
                     }
                 }
 
