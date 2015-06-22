@@ -362,6 +362,8 @@ namespace SOCVRDotNet
 
                 while (true)
                 {
+                    Thread.Sleep((int)Math.Max((PollInterval.TotalMilliseconds / 10), 1000));
+
                     currentPageNo++;
 
                     var pageReviews = LoadSinglePageCVReviews(fkey, currentPageNo);
