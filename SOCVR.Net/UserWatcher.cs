@@ -362,7 +362,7 @@ namespace SOCVRDotNet
 
                 while (true)
                 {
-                    Thread.Sleep((int)Math.Max((PollInterval.TotalMilliseconds / 10), 1000));
+                    Thread.Sleep((int)Math.Max((PollInterval.TotalMilliseconds / 3), 1000));
 
                     currentPageNo++;
 
@@ -419,6 +419,14 @@ namespace SOCVRDotNet
 
                     if (reviews.Any(r => r.ID == id)) { continue; }
                     reviews.Add(new ReviewItem(id, fkey));
+                }
+            }
+            catch (WebException ex)
+            {
+                if (ex.Response != null && ((HttpWebResponse)ex.Response).StatusCode == HttpStatusCode.ServiceUnavailable)
+                {
+                    Thread.Sleep(15000);
+                    return LoadSinglePageCVReviews(fkey, page);
                 }
             }
             catch (Exception ex)
