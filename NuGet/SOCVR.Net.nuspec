@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+    <metadata>
+        <id>SOCVR.Net</id>
+        <version>$version$</version>
+        <title>SOCVR.Net</title>
+        <authors>SO Close Vote Reviewers</authors>
+        <owners>SO Close Vote Reviewers</owners>
+        <licenseUrl>https://www.gnu.org/licenses/gpl-3.0.html</licenseUrl>
+        <projectUrl>https://github.com/SO-Close-Vote-Reviewers/SOCVR.Net</projectUrl>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <description>A .Net (4.5) library for fetching Stack Overflow user close vote review data.</description>
+        <summary>A .Net (4.5) library for fetching Stack Overflow user close vote review data.</summary>
+        <dependencies>
+            <group targetFramework=".NETFramework4.5">
+                <dependency id="ServiceStack.Text" version="4.0.40" />
+                <dependency id="WebSocketSharp" version="1.0.3-rc8" />
+                <dependency id="CsQuery" version="1.3.4" />
+            </group>
+        </dependencies>
+        <frameworkAssemblies>
+            <frameworkAssembly assemblyName="System" targetFramework=".NETFramework4.5" />
+            <frameworkAssembly assemblyName="System.Core" targetFramework=".NETFramework4.5" />
+            <frameworkAssembly assemblyName="Microsoft.CSharp" targetFramework=".NETFramework4.5" />
+        </frameworkAssemblies>
+    </metadata>
+    <files>
+        <file src="..\SOCVR.Net\bin\Release\SOCVR.Net.dll" target="lib\SOCVR.Net.dll" />
+    </files>
+</package>
