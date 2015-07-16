@@ -338,8 +338,7 @@ namespace SOCVRDotNet
                             allTags[tag] = avgNoiseFloor;
                         }
 
-                        // I think that should fix the bug.
-                        prevTags = null; //finishedTags;
+                        prevTags = null;
                         reviewsSinceCurrentTags = 0;
                     }
                 }

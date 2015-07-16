@@ -56,15 +56,21 @@ namespace SOCVRDotNet
 
             foreach (var listener in ConnectedListeners[eventType].Values)
             {
-                try
+                Task.Factory.StartNew(() =>
                 {
-                    Task.Factory.StartNew(() => listener.DynamicInvoke(args));
-                }
-                catch (Exception ex)
-                {
-                    if (eventType == UserEventType.InternalException) { continue; } // Avoid infinite loop.
-                    CallListeners(UserEventType.InternalException, ex);
-                }
+                    try
+                    {
+                        listener.DynamicInvoke(args);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (eventType == UserEventType.InternalException)
+                        {
+                            throw ex;
+                        }
+                        CallListeners(UserEventType.InternalException, ex);
+                    }
+                });
             }
         }
 
@@ -102,16 +108,6 @@ namespace SOCVRDotNet
                 var index = ConnectedListeners[eventType].Keys.Max() + 1;
                 ConnectedListeners[eventType][index] = listener;
             }
-        }
-
-        public void UpdateListener(UserEventType eventType, Delegate oldListener, Delegate newListener)
-        {
-            if (disposed) { return; }
-            if (!ConnectedListeners.ContainsKey(eventType)) { throw new KeyNotFoundException(); }
-            if (!ConnectedListeners[eventType].Values.Contains(oldListener)) { throw new KeyNotFoundException(); }
-
-            var index = ConnectedListeners[eventType].Where(kv => kv.Value == oldListener).First().Key;
-            ConnectedListeners[eventType][index] = newListener;
         }
 
         public void DisconnectListener(UserEventType eventType, Delegate listener)
