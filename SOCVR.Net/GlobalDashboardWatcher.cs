@@ -61,15 +61,22 @@ namespace SOCVRDotNet
 
         private static void HandleMessage(string message)
         {
-            var obj = JsonSerializer.DeserializeFromString<Dictionary<string, object>[]>(message);
-            var data = JsonSerializer.DeserializeFromString<Dictionary<string, object>>(obj[0]["data"].ToString());
-            var queue = (ReviewQueue)int.Parse(data["i"].ToString());
-            var userID = int.Parse(data["u"].ToString());
+            if (string.IsNullOrEmpty(message)) { return; }
 
-            if (UserEnteredQueue != null)
+            try
             {
-                UserEnteredQueue(queue, userID);
+                var obj = JsonSerializer.DeserializeFromString<Dictionary<string, object>[]>(message);
+                var data = JsonSerializer.DeserializeFromString<Dictionary<string, object>>(obj[0]["data"].ToString());
+                var queue = (ReviewQueue)int.Parse(data["i"].ToString());
+                var userID = int.Parse(data["u"].ToString());
+
+                if (UserEnteredQueue != null)
+                {
+                    UserEnteredQueue(queue, userID);
+                }
             }
+            // Ignore exceptions from parsing malformed messages.
+            catch (Exception) { }
         }
 
         private static void HandleException(Exception ex)
