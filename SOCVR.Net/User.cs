@@ -25,6 +25,8 @@ using System.Text;
 using CsQuery;
 using System.Collections.Generic;
 using System.Linq;
+using System;
+using System.Threading;
 
 namespace SOCVRDotNet
 {
@@ -70,12 +72,53 @@ namespace SOCVRDotNet
             return reviews;
         }
 
-        internal static string GetFKey()
+        public static string GetFKey()
         {
             var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");
             var dom = CQ.Create(html);
             var fkeyE = dom["input"].FirstOrDefault(e => e.Attributes["name"] != null && e.Attributes["name"] == "fkey");
             return fkeyE == null ? null : fkeyE.Attributes["value"];
+        }
+
+        internal static List<ReviewItem> LoadSinglePageCVReviews(string fkey, int userID, int page)
+        {
+            if (page < 1) { throw new ArgumentOutOfRangeException("page", "Must be more than 0."); }
+
+            var reviews = new List<ReviewItem>();
+
+            try
+            {
+                var reqUrl = "http://stackoverflow.com/ajax/users/tab/" + userID + "?tab=activity&sort=reviews&page=" + page;
+                var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString(reqUrl);
+                var dom = CQ.Create(pageHtml);
+
+                foreach (var j in dom["td"])
+                {
+                    if (j.FirstElementChild == null ||
+                        string.IsNullOrEmpty(j.FirstElementChild.Attributes["href"]) ||
+                        !j.FirstElementChild.Attributes["href"].StartsWith(@"/review/close/"))
+                    {
+                        continue;
+                    }
+
+                    var url = j.FirstElementChild.Attributes["href"];
+                    var reviewID = url.Remove(0, url.LastIndexOf('/') + 1);
+                    var id = int.Parse(reviewID);
+
+                    if (reviews.Any(r => r.ID == id)) { continue; }
+                    reviews.Add(new ReviewItem(id, fkey));
+                }
+            }
+            catch (WebException ex)
+            {
+                if (ex.Response != null && ((HttpWebResponse)ex.Response).StatusCode == HttpStatusCode.ServiceUnavailable)
+                {
+                    Thread.Sleep(15000);
+                    return LoadSinglePageCVReviews(fkey, userID, page);
+                }
+            }
+
+            return reviews;
         }
     }
 }
