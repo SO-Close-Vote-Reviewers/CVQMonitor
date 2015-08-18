@@ -29,20 +29,29 @@ using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
-    internal static class ReviewMonitorPool
+    public static class ReviewMonitorPool
     {
         private static ConcurrentDictionary<int, ReviewMonitor> monitors = new ConcurrentDictionary<int, ReviewMonitor>();
+
+        /// <summary>
+        /// The number of requests per minute to maintain while ReviewMonitors are active. 
+        /// </summary>
+        public static double RequestThroughput
+        {
+            get; set;
+        }
 
 
 
         static ReviewMonitorPool()
         {
+            RequestThroughput = 12;
             Task.Run(() => UpdatePollPeriods());
         }
 
 
 
-        public static ReviewMonitor NewMonitor(int userID, DateTime startTime, List<ReviewItem> todaysCVReviews, double avgReviewsMin)
+        internal static ReviewMonitor NewMonitor(int userID, DateTime startTime, List<ReviewItem> todaysCVReviews, double avgReviewsMin)
         {
             if (monitors.ContainsKey(userID))
             {
@@ -56,7 +65,7 @@ namespace SOCVRDotNet
             return m;
         }
 
-        public static void CleanUpMonitor(int userID)
+        internal static void CleanUpMonitor(int userID)
         {
             if (!monitors.ContainsKey(userID))
             {
@@ -89,11 +98,11 @@ namespace SOCVRDotNet
                 }
 
                 var rawReqsMin = activeMonitors.Sum(kv => kv.Value.AvgReviewsPerMin);
-                var usageFactor = Math.Max(rawReqsMin / 12, 0.25);
+                var usageFactor = Math.Max(rawReqsMin / RequestThroughput, 0.25);
 
                 foreach (var kv in activeMonitors)
                 {
-                    var mins = Math.Max(1 / monitors[kv.Key].AvgReviewsPerMin * usageFactor, 1D / 12);
+                    var mins = Math.Max(1 / monitors[kv.Key].AvgReviewsPerMin * usageFactor, 1D / RequestThroughput);
                     monitors[kv.Key].PollInterval = TimeSpan.FromMinutes(mins);
                 }
             }
