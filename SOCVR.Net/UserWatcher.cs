@@ -112,6 +112,12 @@ namespace SOCVRDotNet
                 IsReviewing = true;
                 EventManager.CallListeners(UserEventType.ReviewingStarted);
 
+                // Clean up the last used monitor if necessary.
+                if (reviewMonitor != null)
+                {
+                    ReviewMonitorPool.CleanUpMonitor(UserID);
+                }
+
                 reviewMonitor = ReviewMonitorPool.NewMonitor(UserID, startTime, TodaysCVReviews, avgReviewsMin);
                 reviewMonitor.Start();
 
