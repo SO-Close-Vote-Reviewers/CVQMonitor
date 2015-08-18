@@ -66,9 +66,9 @@ namespace SOCVRDotNet
 
         /// <summary>
         /// The interval at which to actively poll a user's profile
-        /// for CV review data whilst they're reviewing. (Default 10 seconds.)
+        /// for CV review data whilst they're reviewing.
         /// </summary>
-        public TimeSpan PollInterval { get; set; }
+        public TimeSpan PollInterval { get; internal set; }
 
         public double AvgReviewsPerMin
         {

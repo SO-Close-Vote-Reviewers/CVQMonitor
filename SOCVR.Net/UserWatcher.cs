@@ -94,6 +94,8 @@ namespace SOCVRDotNet
 
             reviewsRefreshMre.Set();
             EventManager.Dispose();
+            ReviewMonitorPool.CleanUpMonitor(UserID);
+
             GC.SuppressFinalize(this);
         }
 
@@ -110,7 +112,7 @@ namespace SOCVRDotNet
                 IsReviewing = true;
                 EventManager.CallListeners(UserEventType.ReviewingStarted);
 
-                reviewMonitor = new ReviewMonitor(UserID, startTime, TodaysCVReviews, avgReviewsMin);
+                reviewMonitor = ReviewMonitorPool.NewMonitor(UserID, startTime, TodaysCVReviews, avgReviewsMin);
                 reviewMonitor.Start();
 
                 tagMonitor = new TagMonitor(ref reviewMonitor);

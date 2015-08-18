@@ -55,6 +55,7 @@
     <Compile Include="ReviewAction.cs" />
     <Compile Include="ReviewItem.cs" />
     <Compile Include="ReviewMonitor.cs" />
+    <Compile Include="ReviewMonitorPool.cs" />
     <Compile Include="ReviewResult.cs" />
     <Compile Include="ReviewQueue.cs" />
     <Compile Include="TagMonitor.cs" />

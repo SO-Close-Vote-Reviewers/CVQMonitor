@@ -116,6 +116,10 @@ namespace SOCVRDotNet
                     Thread.Sleep(15000);
                     return LoadSinglePageCVReviews(fkey, userID, page);
                 }
+                else
+                {
+                    throw ex;
+                }
             }
 
             return reviews;
