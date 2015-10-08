@@ -34,7 +34,7 @@ namespace SOCVRDotNet
         private static ConcurrentDictionary<int, ReviewMonitor> monitors = new ConcurrentDictionary<int, ReviewMonitor>();
 
         /// <summary>
-        /// The number of requests per minute to maintain while ReviewMonitors are active. 
+        /// The number of requests per minute to maintain while ReviewMonitors are active. Default: 10.
         /// </summary>
         public static double RequestThroughput
         {
@@ -45,7 +45,7 @@ namespace SOCVRDotNet
 
         static ReviewMonitorPool()
         {
-            RequestThroughput = 12;
+            RequestThroughput = 10;
             Task.Run(() => UpdatePollPeriods());
         }
 
@@ -55,7 +55,7 @@ namespace SOCVRDotNet
         {
             if (monitors.ContainsKey(userID))
             {
-                throw new ArgumentException("Cannot create dupelicate 'ReviewMonitor's for the same user.", "userID");
+                throw new ArgumentException("Cannot create duplicate 'ReviewMonitor's for the same user.", "userID");
             }
 
             var m = new ReviewMonitor(userID, startTime, todaysCVReviews, avgReviewsMin);
@@ -72,8 +72,9 @@ namespace SOCVRDotNet
                 throw new KeyNotFoundException();
             }
 
-            ReviewMonitor temp;
-            monitors.TryRemove(userID, out temp);
+            ReviewMonitor m;
+            monitors.TryRemove(userID, out m);
+            m.Stop();
         }
 
 

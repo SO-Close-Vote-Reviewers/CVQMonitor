@@ -76,7 +76,7 @@ namespace SOCVRDotNet
             {
                 if (SessionReviews == null || SessionReviews.Count < 3) { return avgReviewingSpeed; }
 
-                var sessionAvg = SessionReviews.Count / (DateTime.UtcNow - startTime).TotalMinutes;
+                var sessionAvg = SessionReviews.Count / (DateTime.UtcNow.AddSeconds(-(DateTime.UtcNow - latestReviewTime).TotalSeconds) - startTime).TotalMinutes;
 
                 avgReviewingSpeed = (avgReviewingSpeed + sessionAvg) / 2;
 

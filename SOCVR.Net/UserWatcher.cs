@@ -139,6 +139,7 @@ namespace SOCVRDotNet
             }));
             reviewMonitor.EventManager.ConnectListener(UserEventType.ReviewingFinished, new Action<DateTime, DateTime, List<ReviewItem>>((s, e, r) =>
             {
+                IsReviewing = false;
                 EventManager.CallListeners(UserEventType.ReviewingFinished, s, e, r);
             }));
             reviewMonitor.EventManager.ConnectListener(UserEventType.AuditFailed, new Action<ReviewItem>(r =>
@@ -170,7 +171,7 @@ namespace SOCVRDotNet
 
                 while (true)
                 {
-                    Thread.Sleep(3000);
+                    Thread.Sleep(4000);
 
                     currentPageNo++;
 
