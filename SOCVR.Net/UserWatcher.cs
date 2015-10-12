@@ -94,7 +94,6 @@ namespace SOCVRDotNet
 
             reviewsRefreshMre.Set();
             EventManager.Dispose();
-            ReviewMonitorPool.CleanUpMonitor(UserID);
 
             GC.SuppressFinalize(this);
         }
@@ -111,12 +110,6 @@ namespace SOCVRDotNet
                 var startTime = DateTime.UtcNow.AddSeconds(-15);
                 IsReviewing = true;
                 EventManager.CallListeners(UserEventType.ReviewingStarted);
-
-                // Clean up the last used monitor if necessary.
-                if (reviewMonitor != null)
-                {
-                    ReviewMonitorPool.CleanUpMonitor(UserID);
-                }
 
                 reviewMonitor = ReviewMonitorPool.NewMonitor(UserID, startTime, TodaysCVReviews, avgReviewsMin);
                 reviewMonitor.Start();
@@ -140,6 +133,7 @@ namespace SOCVRDotNet
             reviewMonitor.EventManager.ConnectListener(UserEventType.ReviewingFinished, new Action<DateTime, DateTime, List<ReviewItem>>((s, e, r) =>
             {
                 IsReviewing = false;
+                TodaysCVReviews.AddRange(r);
                 EventManager.CallListeners(UserEventType.ReviewingFinished, s, e, r);
             }));
             reviewMonitor.EventManager.ConnectListener(UserEventType.AuditFailed, new Action<ReviewItem>(r =>

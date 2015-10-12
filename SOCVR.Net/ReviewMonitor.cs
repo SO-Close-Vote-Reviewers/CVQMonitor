@@ -23,6 +23,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CsQuery;
@@ -31,13 +33,16 @@ namespace SOCVRDotNet
 {
     public class ReviewMonitor
     {
+        private readonly Regex lastActiveTime = new Regex(@"(?is)^\s*<div.*>.*</span></span></div>\s*|<br\s*?/>.*", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private readonly ManualResetEvent mre = new ManualResetEvent(false);
         private readonly string fkey;
         private readonly List<ReviewItem> prevCVRs;
         private int reviewsAvailable;
         private double avgReviewingSpeed;
         private DateTime startTime;
+        private DateTime lastActive;
         private ReviewItem latestReview;
+        private DateTime lastActiveFetch = DateTime.MinValue;
         private DateTime latestReviewTime = DateTime.MaxValue;
 
         public int UserID { get; private set; }
@@ -66,9 +71,42 @@ namespace SOCVRDotNet
 
         /// <summary>
         /// The interval at which to actively poll a user's profile
-        /// for CV review data whilst they're reviewing.
+        /// for CV review data whilst they're reviewing (a minimum 
+        /// of 2 requests are sent per poll).
         /// </summary>
         public TimeSpan PollInterval { get; internal set; }
+
+        public DateTime LastActive
+        {
+            get
+            {
+                if ((DateTime.UtcNow - lastActiveFetch).TotalSeconds < 15) { return lastActive; }
+
+                var html = new WebClient().DownloadString("http://stackoverflow.com/review/user-info/2/" + UserID);
+                var lastActiveStr = lastActiveTime.Replace(html, "");
+                lastActiveStr = lastActiveStr.Remove(0, 7);
+                var digits = int.Parse(new string(lastActiveStr.Where(char.IsDigit).ToArray()));
+
+                if (lastActiveStr.Contains("sec"))
+                {
+                    lastActive = DateTime.UtcNow.Add(-TimeSpan.FromSeconds(digits));
+                }
+                else if (lastActiveStr.Contains("min"))
+                {
+                    lastActive = DateTime.UtcNow.Add(-TimeSpan.FromMinutes(digits));
+                }
+                else if (lastActiveStr.Contains("hour"))
+                {
+                    lastActive = DateTime.UtcNow.Add(-TimeSpan.FromHours(digits));
+                }
+                else
+                {
+                    lastActive = DateTime.MinValue;
+                }
+
+                return lastActive;
+            }
+        }
 
         public double AvgReviewsPerMin
         {
@@ -160,14 +198,14 @@ namespace SOCVRDotNet
                     }
 
                     if (latestReview != null && latestReview.AuditPassed == false &&
-                       (DateTime.UtcNow - latestReviewTime).TotalSeconds > (60 / AvgReviewsPerMin) * AuditFailureFactor)
+                       (DateTime.UtcNow - LastActive).TotalSeconds > (60 / AvgReviewsPerMin) * AuditFailureFactor)
                     {
                         // We can be pretty sure they've been temporarily banned.
                         EndSession();
                         return;
                     }
 
-                    if ((DateTime.UtcNow - latestReviewTime).TotalSeconds > (60 / AvgReviewsPerMin) * IdleFactor)
+                    if ((DateTime.UtcNow - LastActive).TotalSeconds > (60 / AvgReviewsPerMin) * IdleFactor)
                     {
                         // They've probably finished.
                         EndSession();
@@ -185,7 +223,7 @@ namespace SOCVRDotNet
 
         private void EndSession()
         {
-            IsMonitoring = false;
+            Stop();
             // Correct offset based on average.
             startTime = startTime.AddSeconds(-((60 / AvgReviewsPerMin) - 15));
             EventManager.CallListeners(UserEventType.ReviewingFinished, startTime, latestReviewTime, SessionReviews);

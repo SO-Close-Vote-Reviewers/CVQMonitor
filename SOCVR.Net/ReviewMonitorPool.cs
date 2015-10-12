@@ -65,18 +65,6 @@ namespace SOCVRDotNet
             return m;
         }
 
-        internal static void CleanUpMonitor(int userID)
-        {
-            if (!monitors.ContainsKey(userID))
-            {
-                throw new KeyNotFoundException();
-            }
-
-            ReviewMonitor m;
-            monitors.TryRemove(userID, out m);
-            m.Stop();
-        }
-
 
 
         private static void UpdatePollPeriods()
@@ -86,25 +74,28 @@ namespace SOCVRDotNet
                 // No need to complicate things with waithandles.
                 Thread.Sleep(1000);
 
+                // Remove inactive monitors.
+                var inactiveMonitors = monitors.Where(m => !m.Value.IsMonitoring);
+                foreach (var monitor in inactiveMonitors)
+                {
+                    ReviewMonitor m;
+                    monitors.TryRemove(monitor.Key, out m);
+                }
+
                 if (monitors.Count == 0)
                 {
                     continue;
                 }
 
-                var activeMonitors = monitors.Where(kv => kv.Value.IsMonitoring).ToArray();
-
-                if (activeMonitors.Length == 0)
-                {
-                    continue;
-                }
-
-                var rawReqsMin = activeMonitors.Sum(kv => kv.Value.AvgReviewsPerMin);
+                var monitorsCpy = monitors;
+                var rawReqsMin = monitorsCpy.Sum(kv => kv.Value.AvgReviewsPerMin);
                 var usageFactor = Math.Max(rawReqsMin / RequestThroughput, 0.25);
 
-                foreach (var kv in activeMonitors)
+                foreach (var kv in monitorsCpy)
                 {
                     var mins = Math.Max(1 / monitors[kv.Key].AvgReviewsPerMin * usageFactor, 1D / RequestThroughput);
-                    monitors[kv.Key].PollInterval = TimeSpan.FromMinutes(mins);
+                    monitors[kv.Key].PollInterval = TimeSpan.FromMinutes(mins * 2);
+                    // ^ Multiple by 2 as each monitor makes at least 2 reqs per poll.
                 }
             }
         }
