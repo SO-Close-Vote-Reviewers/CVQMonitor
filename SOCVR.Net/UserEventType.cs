@@ -25,11 +25,10 @@ namespace SOCVRDotNet
     public enum UserEventType
     {
         InternalException = -1,
-        ReviewingStarted,
-        ReviewingFinished,
         ItemReviewed,
         AuditPassed,
         AuditFailed,
+        ReviewLimitReached,
         CurrentTagsChanged
     }
 }

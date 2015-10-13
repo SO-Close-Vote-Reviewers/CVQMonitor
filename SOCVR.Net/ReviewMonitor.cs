@@ -221,14 +221,6 @@ namespace SOCVRDotNet
             }
         }
 
-        private void EndSession()
-        {
-            Stop();
-            // Correct offset based on average.
-            startTime = startTime.AddSeconds(-((60 / AvgReviewsPerMin) - 15));
-            EventManager.CallListeners(UserEventType.ReviewingFinished, startTime, latestReviewTime, SessionReviews);
-        }
-
         private int GetReviewsAvailable()
         {
             try
