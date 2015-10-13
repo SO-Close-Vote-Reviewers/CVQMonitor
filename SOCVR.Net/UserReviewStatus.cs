@@ -31,9 +31,9 @@ namespace SOCVRDotNet
         private DateTime lastReview;
         private HashSet<DateTime> reviews;
 
-        public int ReviewsToday { get; set; }
+        public int ReviewsToday { get; internal set; }
 
-        public int QueuedRequests { get; set; }
+        public int QueuedRequests { get; internal set; }
 
         public double AvgReviewsPerMin
         {
@@ -56,7 +56,16 @@ namespace SOCVRDotNet
             set
             {
                 reviews.Add(value);
+                ReviewsToday++;
                 lastReview = value;
+            }
+        }
+
+        internal double QueueScore
+        {
+            get
+            {
+                return AvgReviewsPerMin * QueuedRequests;
             }
         }
 

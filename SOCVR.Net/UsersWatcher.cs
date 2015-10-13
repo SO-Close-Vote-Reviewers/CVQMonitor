@@ -35,6 +35,7 @@ namespace SOCVRDotNet
     {
         private readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private readonly ManualResetEvent reviewsRefreshMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent reqHandlerMre = new ManualResetEvent(false);
         private bool dispose;
 
         public ConcurrentDictionary<int, UserReviewStatus> Users { get; private set; }
@@ -43,10 +44,16 @@ namespace SOCVRDotNet
 
         public int ReviewsCompleted { get; private set; }
 
+        /// <summary>
+        /// The maximum number of requests (per minutes) to be made.
+        /// </summary>
+        public int RequestThroughput { get; set; }
+
 
 
         public UsersWatcher(IEnumerable<int> userIDs)
         {
+            RequestThroughput = 10;
             Users = new ConcurrentDictionary<int, UserReviewStatus>();
             foreach (var user in userIDs)
             {
@@ -57,7 +64,7 @@ namespace SOCVRDotNet
                 Thread.Sleep(3000);
             }
             EventManager = new EventManager();
-            Task.Run(() => StartWatcher());
+            Task.Run(() => AttachWatcherEventListeners());
             Task.Run(() => ResetDailyReviews());
             Task.Run(() => HandleRequestQueue());
         }
@@ -74,11 +81,23 @@ namespace SOCVRDotNet
             if (dispose) { return; }
             dispose = true;
 
+            reqHandlerMre.Set();
             reviewsRefreshMre.Set();
             EventManager.Dispose();
 
             GC.SuppressFinalize(this);
         }
+
+        public void AddUser(int userID)
+        {
+            if (Users.ContainsKey(userID)) { return; }
+
+            Users[userID] = new UserReviewStatus
+            {
+                ReviewsToday = FetchTodaysUserReviewCount(userID)
+            };
+        }
+
 
 
         private void ResetDailyReviews()
@@ -112,7 +131,7 @@ namespace SOCVRDotNet
             }
         }
 
-        private void StartWatcher()
+        private void AttachWatcherEventListeners()
         {
             GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
@@ -120,16 +139,33 @@ namespace SOCVRDotNet
                 if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) { return; }
 
                 Users[id].QueuedRequests++;
+                Users[id].LastReview = DateTime.UtcNow;
             };
         }
 
         private void HandleRequestQueue()
         {
+            var lastUser = new KeyValuePair<int, UserReviewStatus>(0, new UserReviewStatus());
+
             while (!dispose)
             {
+                var user = new KeyValuePair<int, UserReviewStatus>(0, new UserReviewStatus());
+                var activeUsers = Users.Values.Count(x => x.QueuedRequests > 0);
 
+                foreach (var u in Users)
+                {
+                    if (u.Value.QueueScore > user.Value.QueueScore && (activeUsers > 1 ? u.Key != lastUser.Key : true))
+                    {
+                        user = u;
+                    }
+                }
+
+                // A miracle happens...
+
+                lastUser = user;
+
+                reqHandlerMre.WaitOne(TimeSpan.FromSeconds(60D / RequestThroughput));
             }
         }
-
     }
 }
