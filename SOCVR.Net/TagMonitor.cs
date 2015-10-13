@@ -1,195 +1,195 @@
-﻿/*
- * SOCVR.Net. A .Net (4.5) library for fetching Stack Overflow user close vote review data.
- * Copyright © 2015, SO-Close-Vote-Reviewers.
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+﻿///*
+// * SOCVR.Net. A .Net (4.5) library for fetching Stack Overflow user close vote review data.
+// * Copyright © 2015, SO-Close-Vote-Reviewers.
+// *
+// * This program is free software: you can redistribute it and/or modify
+// * it under the terms of the GNU General Public License as published by
+// * the Free Software Foundation, either version 3 of the License, or
+// * (at your option) any later version.
+// *
+// * This program is distributed in the hope that it will be useful,
+// * but WITHOUT ANY WARRANTY; without even the implied warranty of
+// * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// * GNU General Public License for more details.
+// *
+// * You should have received a copy of the GNU General Public License
+// * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// */
 
 
 
 
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+//using System;
+//using System.Collections.Concurrent;
+//using System.Collections.Generic;
+//using System.Linq;
+//using System.Threading;
+//using System.Threading.Tasks;
 
-namespace SOCVRDotNet
-{
-    public class TagMonitor
-    {
-        private readonly ConcurrentDictionary<string, float> allTags = new ConcurrentDictionary<string, float>();
-        private readonly ConcurrentDictionary<string, DateTime> tagTimestamps = new ConcurrentDictionary<string, DateTime>();
-        private readonly ReviewMonitor revMonitor;
-        private List<string> prevTags;
-        private int reviewsSinceCurrentTags;
-        private int reviewCount;
+//namespace SOCVRDotNet
+//{
+//    public class TagMonitor
+//    {
+//        private readonly ConcurrentDictionary<string, float> allTags = new ConcurrentDictionary<string, float>();
+//        private readonly ConcurrentDictionary<string, DateTime> tagTimestamps = new ConcurrentDictionary<string, DateTime>();
+//        private readonly ReviewMonitor revMonitor;
+//        private List<string> prevTags;
+//        private int reviewsSinceCurrentTags;
+//        private int reviewCount;
 
-        internal EventManager EventManager { get; private set; }
-
-
-
-        public TagMonitor(ref ReviewMonitor reviewMonitor)
-        {
-            if (reviewMonitor == null) { throw new ArgumentNullException("reviewMonitor"); }
-
-            revMonitor = reviewMonitor;
-            EventManager = new EventManager();
-
-            Task.Run(() =>
-            {
-                while (true)
-                {
-                    if (revMonitor == null) { return; }
-
-                    if (!revMonitor.IsMonitoring)
-                    {
-                        Thread.Sleep(1000);
-                        continue;
-                    }
-
-                    MonitorLoop();
-                }
-            });
-        }
+//        internal EventManager EventManager { get; private set; }
 
 
 
-        private void MonitorLoop()
-        {
-            revMonitor.EventManager.ConnectListener(UserEventType.ItemReviewed, new Action<ReviewItem>(AddTag));
+//        public TagMonitor(ref ReviewMonitor reviewMonitor)
+//        {
+//            if (reviewMonitor == null) { throw new ArgumentNullException("reviewMonitor"); }
 
-            try
-            {
-                while (revMonitor != null && revMonitor.IsMonitoring)
-                {
-                    var rate = TimeSpan.FromSeconds((60 / revMonitor.AvgReviewsPerMin) / 2);
-                    Thread.Sleep(rate);
+//            revMonitor = reviewMonitor;
+//            EventManager = new EventManager();
 
-                    // NOT ENOUGH DATAZ.
-                    if (reviewCount < 9) { continue; }
+//            Task.Run(() =>
+//            {
+//                while (true)
+//                {
+//                    if (revMonitor == null) { return; }
 
-                    var tagsSum = allTags.Sum(t => t.Value);
-                    var highKvs = allTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
+//                    if (!revMonitor.IsMonitoring)
+//                    {
+//                        Thread.Sleep(1000);
+//                        continue;
+//                    }
 
-                    // Not enough (accurate) data to continue analysis.
-                    if (highKvs.Count == 0) { continue; }
+//                    MonitorLoop();
+//                }
+//            });
+//        }
 
-                    var maxTag = highKvs.Max(t => t.Value);
-                    var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
-                    var avgNoiseFloor = allTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
-                    prevTags = prevTags ?? topTags;
 
-                    // They've started reviewing a different tag.
-                    if (topTags.Count > 3 ||
-                        reviewsSinceCurrentTags >= 3 ||
-                        topTags.Any(t => !prevTags.Contains(t)))
-                    {
-                        HandleTagChange(ref topTags, avgNoiseFloor);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                EventManager.CallListeners(UserEventType.InternalException, ex);
-            }
 
-            if (revMonitor == null) { return; }
+//        private void MonitorLoop()
+//        {
+//            revMonitor.EventManager.ConnectListener(UserEventType.ItemReviewed, new Action<ReviewItem>(AddTag));
 
-            revMonitor.EventManager.DisconnectListener(UserEventType.ItemReviewed, new Action<ReviewItem>(AddTag));
-        }
+//            try
+//            {
+//                while (revMonitor != null && revMonitor.IsMonitoring)
+//                {
+//                    var rate = TimeSpan.FromSeconds((60 / revMonitor.AvgReviewsPerMin) / 2);
+//                    Thread.Sleep(rate);
 
-        private void HandleTagChange(ref List<string> topTags, float avgNoiseFloor)
-        {
-            try
-            {
-                while (topTags.Count > 3)
-                {
-                    var oldestTag = new KeyValuePair<string, DateTime>(null, DateTime.MaxValue);
-                    foreach (var tag in topTags)
-                    {
-                        if (tagTimestamps[tag] < oldestTag.Value)
-                        {
-                            oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
-                        }
-                    }
-                    allTags[oldestTag.Key] = avgNoiseFloor;
-                    topTags.Remove(oldestTag.Key);
-                }
+//                    // NOT ENOUGH DATAZ.
+//                    if (reviewCount < 9) { continue; }
 
-                List<string> finishedTags;
+//                    var tagsSum = allTags.Sum(t => t.Value);
+//                    var highKvs = allTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
 
-                if (reviewsSinceCurrentTags >= 3)
-                {
-                    finishedTags = prevTags;
-                }
-                else
-                {
-                    var tt = topTags;
-                    finishedTags = prevTags.Where(t => !tt.Contains(t)).ToList();
-                }
+//                    // Not enough (accurate) data to continue analysis.
+//                    if (highKvs.Count == 0) { continue; }
 
-                EventManager.CallListeners(UserEventType.CurrentTagsChanged, finishedTags);
+//                    var maxTag = highKvs.Max(t => t.Value);
+//                    var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
+//                    var avgNoiseFloor = allTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
+//                    prevTags = prevTags ?? topTags;
 
-                foreach (var tag in finishedTags)
-                {
-                    allTags[tag] = avgNoiseFloor;
-                }
+//                    // They've started reviewing a different tag.
+//                    if (topTags.Count > 3 ||
+//                        reviewsSinceCurrentTags >= 3 ||
+//                        topTags.Any(t => !prevTags.Contains(t)))
+//                    {
+//                        HandleTagChange(ref topTags, avgNoiseFloor);
+//                    }
+//                }
+//            }
+//            catch (Exception ex)
+//            {
+//                EventManager.CallListeners(UserEventType.InternalException, ex);
+//            }
 
-                prevTags = null;
-                reviewsSinceCurrentTags = 0;
-            }
-            catch (Exception ex)
-            {
-                EventManager.CallListeners(UserEventType.InternalException, ex);
-            }
-        }
+//            if (revMonitor == null) { return; }
 
-        private void AddTag(ReviewItem r)
-        {
-            if (r.AuditPassed != null) { return; }
+//            revMonitor.EventManager.DisconnectListener(UserEventType.ItemReviewed, new Action<ReviewItem>(AddTag));
+//        }
 
-            reviewCount++;
+//        private void HandleTagChange(ref List<string> topTags, float avgNoiseFloor)
+//        {
+//            try
+//            {
+//                while (topTags.Count > 3)
+//                {
+//                    var oldestTag = new KeyValuePair<string, DateTime>(null, DateTime.MaxValue);
+//                    foreach (var tag in topTags)
+//                    {
+//                        if (tagTimestamps[tag] < oldestTag.Value)
+//                        {
+//                            oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
+//                        }
+//                    }
+//                    allTags[oldestTag.Key] = avgNoiseFloor;
+//                    topTags.Remove(oldestTag.Key);
+//                }
 
-            var timestamp = r.Results.First(rr => rr.UserID == revMonitor.UserID).Timestamp;
+//                List<string> finishedTags;
 
-            foreach (var tag in r.Tags)
-            {
-                if (allTags.ContainsKey(tag))
-                {
-                    allTags[tag]++;
-                }
-                else
-                {
-                    allTags[tag] = 1;
-                }
-                tagTimestamps[tag] = timestamp;
-            }
+//                if (reviewsSinceCurrentTags >= 3)
+//                {
+//                    finishedTags = prevTags;
+//                }
+//                else
+//                {
+//                    var tt = topTags;
+//                    finishedTags = prevTags.Where(t => !tt.Contains(t)).ToList();
+//                }
 
-            if (prevTags != null && prevTags.Count != 0)
-            {
-                if (prevTags.Any(t => r.Tags.Contains(t)))
-                {
-                    reviewsSinceCurrentTags = 0;
-                }
-                else
-                {
-                    reviewsSinceCurrentTags++;
-                }
-            }
-        }
-    }
-}
+//                EventManager.CallListeners(UserEventType.CurrentTagsChanged, finishedTags);
+
+//                foreach (var tag in finishedTags)
+//                {
+//                    allTags[tag] = avgNoiseFloor;
+//                }
+
+//                prevTags = null;
+//                reviewsSinceCurrentTags = 0;
+//            }
+//            catch (Exception ex)
+//            {
+//                EventManager.CallListeners(UserEventType.InternalException, ex);
+//            }
+//        }
+
+//        private void AddTag(ReviewItem r)
+//        {
+//            if (r.AuditPassed != null) { return; }
+
+//            reviewCount++;
+
+//            var timestamp = r.Results.First(rr => rr.UserID == revMonitor.UserID).Timestamp;
+
+//            foreach (var tag in r.Tags)
+//            {
+//                if (allTags.ContainsKey(tag))
+//                {
+//                    allTags[tag]++;
+//                }
+//                else
+//                {
+//                    allTags[tag] = 1;
+//                }
+//                tagTimestamps[tag] = timestamp;
+//            }
+
+//            if (prevTags != null && prevTags.Count != 0)
+//            {
+//                if (prevTags.Any(t => r.Tags.Contains(t)))
+//                {
+//                    reviewsSinceCurrentTags = 0;
+//                }
+//                else
+//                {
+//                    reviewsSinceCurrentTags++;
+//                }
+//            }
+//        }
+//    }
+//}

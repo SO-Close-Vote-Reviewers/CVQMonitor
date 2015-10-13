@@ -36,9 +36,10 @@ namespace SOCVRDotNet
         private readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private readonly ManualResetEvent reviewsRefreshMre = new ManualResetEvent(false);
         private readonly ManualResetEvent reqHandlerMre = new ManualResetEvent(false);
+        private string fkey;
         private bool dispose;
 
-        public ConcurrentDictionary<int, UserReviewStatus> Users { get; private set; }
+        public ConcurrentDictionary<int, User> Users { get; private set; }
 
         public EventManager EventManager { get; private set; }
 
@@ -53,14 +54,15 @@ namespace SOCVRDotNet
 
         public UsersWatcher(IEnumerable<int> userIDs)
         {
+            fkey = UserDataFetcher.GetFKey();
             RequestThroughput = 10;
-            Users = new ConcurrentDictionary<int, UserReviewStatus>();
+            Users = new ConcurrentDictionary<int, User>();
             foreach (var user in userIDs)
             {
-                Users[user] = new UserReviewStatus
+                Users[user] = new User(fkey, user, new UserReviewStatus
                 {
                     ReviewsToday = FetchTodaysUserReviewCount(user)
-                };
+                });
                 Thread.Sleep(3000);
             }
             EventManager = new EventManager();
@@ -92,10 +94,10 @@ namespace SOCVRDotNet
         {
             if (Users.ContainsKey(userID)) { return; }
 
-            Users[userID] = new UserReviewStatus
+            Users[userID] = new User(fkey, userID, new UserReviewStatus
             {
                 ReviewsToday = FetchTodaysUserReviewCount(userID)
-            };
+            });
         }
 
 
@@ -110,7 +112,7 @@ namespace SOCVRDotNet
 
                 foreach (var id in Users.Keys)
                 {
-                    Users[id].ReviewsToday = 0;
+                    Users[id].ReviewStatus.ReviewsToday = 0;
                 }
             }
         }
@@ -138,29 +140,32 @@ namespace SOCVRDotNet
             {
                 if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) { return; }
 
-                Users[id].QueuedRequests++;
-                Users[id].LastReview = DateTime.UtcNow;
+                Users[id].ReviewStatus.QueuedReviews++;
+                Users[id].ReviewStatus.LastReview = DateTime.UtcNow;
             };
         }
 
         private void HandleRequestQueue()
         {
-            var lastUser = new KeyValuePair<int, UserReviewStatus>(0, new UserReviewStatus());
+            var lastUser = new KeyValuePair<int, User>(0, new User("", 0, new UserReviewStatus()));
 
             while (!dispose)
             {
-                var user = new KeyValuePair<int, UserReviewStatus>(0, new UserReviewStatus());
-                var activeUsers = Users.Values.Count(x => x.QueuedRequests > 0);
+                var user = new KeyValuePair<int, User>(0, new User("", 0, new UserReviewStatus()));
+                var activeUsers = Users.Values.Count(x => x.ReviewStatus.QueuedReviews > 0);
 
                 foreach (var u in Users)
                 {
-                    if (u.Value.QueueScore > user.Value.QueueScore && (activeUsers > 1 ? u.Key != lastUser.Key : true))
+                    if (u.Value.ReviewStatus.QueueScore > user.Value.ReviewStatus.QueueScore &&
+                       (activeUsers > 1 ? u.Key != lastUser.Key : true))
                     {
                         user = u;
                     }
                 }
 
-                // A miracle happens...
+                // Let the User object take control here
+                // and make/process the request.
+                user.Value.ProcessReviews();
 
                 lastUser = user;
 

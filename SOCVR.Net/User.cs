@@ -20,109 +20,56 @@
 
 
 
-using System.Net;
-using System.Text;
-using CsQuery;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System;
-using System.Threading;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
-    public static class User
+    public class User
     {
-        /// <summary>
-        /// Fetches the latest close vote review data.
-        /// </summary>
-        /// <param name="userID">The user ID to fetch close vote data for.</param>
-        /// <param name="reviewCount">The number of reviews to fetch.</param>
-        public static List<ReviewItem> FetchReviews(int userID, int reviewCount = 10)
+        private string fkey;
+
+        public int ID { get; private set; }
+
+        public UserReviewStatus ReviewStatus { get; private set; }
+
+        public EventManager EventManager { get; private set; }
+
+
+
+        public User(string fkey, int userID, UserReviewStatus reviewStatus)
         {
-            var fkey = GetFKey();
-            var currentPageNo = 0;
-            var reviews = new List<ReviewItem>();
-
-            while (reviews.Count < reviewCount)
-            {
-                currentPageNo++;
-                var reqUrl = "http://stackoverflow.com/ajax/users/tab/" + userID + "?tab=activity&sort=reviews&page=" + currentPageNo;
-                var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString(reqUrl);
-                if (pageHtml.Contains("This user has no reviews") && pageHtml.Length < 3000) { break; }
-                var dom = CQ.Create(pageHtml);
-
-                foreach (var j in dom["td"])
-                {
-                    if (j.FirstElementChild == null ||
-                        string.IsNullOrEmpty(j.FirstElementChild.Attributes["href"]) ||
-                        !j.FirstElementChild.Attributes["href"].StartsWith(@"/review/close/"))
-                    {
-                        continue;
-                    }
-
-                    var url = j.FirstElementChild.Attributes["href"];
-                    var reviewID = url.Remove(0, url.LastIndexOf('/') + 1);
-                    var id = int.Parse(reviewID);
-
-                    if (reviews.Any(r => r.ID == id) || reviews.Count >= reviewCount) { continue; }
-                    reviews.Add(new ReviewItem(id, fkey));
-                }
-            }
-
-            return reviews;
+            this.fkey = fkey;
+            ID = userID;
+            ReviewStatus = reviewStatus;
+            EventManager = new EventManager();
         }
 
-        public static string GetFKey()
+
+
+        internal void ProcessReviews()
         {
-            var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");
-            var dom = CQ.Create(html);
-            var fkeyE = dom["input"].FirstOrDefault(e => e.Attributes["name"] != null && e.Attributes["name"] == "fkey");
-            return fkeyE == null ? null : fkeyE.Attributes["value"];
-        }
+            var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, ReviewStatus.QueuedReviews);
 
-        internal static List<ReviewItem> LoadSinglePageCVReviews(string fkey, int userID, int page)
-        {
-            if (page < 1) { throw new ArgumentOutOfRangeException("page", "Must be more than 0."); }
-
-            var reviews = new List<ReviewItem>();
-
-            try
+            foreach (var id in ids)
             {
-                var reqUrl = "http://stackoverflow.com/ajax/users/tab/" + userID + "?tab=activity&sort=reviews&page=" + page;
-                var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString(reqUrl);
-                var dom = CQ.Create(pageHtml);
+                var review = new ReviewItem(id, fkey);
 
-                foreach (var j in dom["td"])
+                // Notify audit listeners if necessary.
+                if (review.AuditPassed != null)
                 {
-                    if (j.FirstElementChild == null ||
-                        string.IsNullOrEmpty(j.FirstElementChild.Attributes["href"]) ||
-                        !j.FirstElementChild.Attributes["href"].StartsWith(@"/review/close/"))
-                    {
-                        continue;
-                    }
+                    var type = review.AuditPassed == false
+                        ? UserEventType.AuditFailed
+                        : UserEventType.AuditPassed;
 
-                    var url = j.FirstElementChild.Attributes["href"];
-                    var reviewID = url.Remove(0, url.LastIndexOf('/') + 1);
-                    var id = int.Parse(reviewID);
-
-                    if (reviews.Any(r => r.ID == id)) { continue; }
-                    reviews.Add(new ReviewItem(id, fkey));
+                    EventManager.CallListeners(type, review);
                 }
+
+                EventManager.CallListeners(UserEventType.ItemReviewed, review);
             }
-            catch (WebException ex)
-            {
-                if (ex.Response != null && ((HttpWebResponse)ex.Response).StatusCode == HttpStatusCode.ServiceUnavailable)
-                {
-                    Thread.Sleep(15000);
-                    return LoadSinglePageCVReviews(fkey, userID, page);
-                }
-                else
-                {
-                    throw ex;
-                }
-            }
-
-            return reviews;
         }
     }
 }
