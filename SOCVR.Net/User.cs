@@ -23,8 +23,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
@@ -82,6 +80,24 @@ namespace SOCVRDotNet
 
             return ids.Count;
         }
+
+        internal void ResetDailyData(string fkey, int availableReviews)
+        {
+            this.fkey = fkey;
+
+            // Misc. review data
+            ReviewStatus.Reviews.Clear();
+            ReviewStatus.ReviewsCompletedCount = 0;
+            ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
+
+            // Tag data.
+            prevTags = null;
+            reviewsSinceCurrentTags = 0;
+            tagTimestamps.Clear();
+            ReviewStatus.ReviewedTags.Clear();
+        }
+
+
 
         private void CheckTags(ReviewItem review)
         {

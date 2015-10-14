@@ -119,9 +119,7 @@ namespace SOCVRDotNet
 
                 foreach (var id in Users.Keys)
                 {
-                    Users[id].ReviewStatus.ReviewsCompletedCount = 0;
-                    Users[id].ReviewStatus.Reviews.Clear();
-                    Users[id].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
+                    Users[id].ResetDailyData(fkey, availableReviews);
                 }
             }
         }

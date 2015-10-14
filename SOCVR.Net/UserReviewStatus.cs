@@ -22,14 +22,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace SOCVRDotNet
 {
     public class UserReviewStatus
     {
-        //private DateTime lastReview;
-        //private HashSet<DateTime> reviewTimestamps;
         private Action reviewLimitReachedCallback;
         private int reviewsCompleted;
 
@@ -55,34 +52,6 @@ namespace SOCVRDotNet
             }
         }
 
-        // Do we even need this?
-        //public double AvgReviewsPerMin
-        //{
-        //    get
-        //    {
-        //        if (reviewTimestamps.Count == 0) { return 0; }
-        //        reviewTimestamps = new HashSet<DateTime>(reviewTimestamps.Where(r => r.AddHours(2) > DateTime.UtcNow));
-        //        if (reviewTimestamps.Count == 0) { return 0; }
-        //        return reviewTimestamps.Count / (reviewTimestamps.Max() - reviewTimestamps.Min()).TotalMinutes;
-        //    }
-        //}
-
-        // Do we even need this?
-        //internal DateTime LastReview
-        //{
-        //    get
-        //    {
-        //        return lastReview;
-        //    }
-
-        //    set
-        //    {
-        //        reviewTimestamps.Add(value);
-        //        ReviewsCompletedCount++;
-        //        lastReview = value;
-        //    }
-        //}
-
         internal int ReviewLimit { get; set; }
 
         internal Dictionary<string, float> ReviewedTags { get; set; }
@@ -92,10 +61,8 @@ namespace SOCVRDotNet
         public UserReviewStatus(Action reviewLimitReachedCallback)
         {
             this.reviewLimitReachedCallback = reviewLimitReachedCallback;
-            //reviewTimestamps = new HashSet<DateTime>();
             Reviews = new HashSet<ReviewItem>();
             ReviewedTags = new Dictionary<string, float>();
-            //LastReview = DateTime.MinValue;
         }
     }
 }
