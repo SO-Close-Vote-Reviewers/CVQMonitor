@@ -50,7 +50,7 @@ namespace SOCVRDotNet
 
 
 
-        internal void ProcessReviews()
+        internal int ProcessReviews()
         {
             var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, ReviewStatus.QueuedReviews);
 
@@ -69,7 +69,10 @@ namespace SOCVRDotNet
                 }
 
                 EventManager.CallListeners(UserEventType.ItemReviewed, review);
+                ReviewStatus.QueuedReviews--;
             }
+
+            return ids.Count;
         }
     }
 }

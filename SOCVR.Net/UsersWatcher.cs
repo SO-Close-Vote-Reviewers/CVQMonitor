@@ -46,16 +46,17 @@ namespace SOCVRDotNet
         public int ReviewsCompleted { get; private set; }
 
         /// <summary>
-        /// The maximum number of requests (per minutes) to be made.
+        /// The maximum number of reviews (per minutes) to be processed.
+        /// (Default: 100.)
         /// </summary>
-        public int RequestThroughput { get; set; }
+        public int ReviewThroughput { get; set; }
 
 
 
         public UsersWatcher(IEnumerable<int> userIDs)
         {
             fkey = UserDataFetcher.GetFKey();
-            RequestThroughput = 10;
+            ReviewThroughput = 100;
             Users = new ConcurrentDictionary<int, User>();
             foreach (var user in userIDs)
             {
@@ -156,7 +157,7 @@ namespace SOCVRDotNet
 
                 foreach (var u in Users)
                 {
-                    if (u.Value.ReviewStatus.QueueScore > user.Value.ReviewStatus.QueueScore &&
+                    if (u.Value.ReviewStatus.QueuedReviews > user.Value.ReviewStatus.QueuedReviews &&
                        (activeUsers > 1 ? u.Key != lastUser.Key : true))
                     {
                         user = u;
@@ -164,12 +165,12 @@ namespace SOCVRDotNet
                 }
 
                 // Let the User object take control here
-                // and make/process the request.
-                user.Value.ProcessReviews();
+                // and make/process the reviews (along with
+                // decrementing the QueuedReviews counter).
+                var clearedReviews = user.Value.ProcessReviews();
 
                 lastUser = user;
-
-                reqHandlerMre.WaitOne(TimeSpan.FromSeconds(60D / RequestThroughput));
+                reqHandlerMre.WaitOne(TimeSpan.FromSeconds((60D / ReviewThroughput) * clearedReviews));
             }
         }
     }

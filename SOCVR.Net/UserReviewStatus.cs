@@ -61,14 +61,6 @@ namespace SOCVRDotNet
             }
         }
 
-        internal double QueueScore
-        {
-            get
-            {
-                return AvgReviewsPerMin * QueuedReviews;
-            }
-        }
-
 
 
         public UserReviewStatus()
