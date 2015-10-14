@@ -28,6 +28,7 @@ using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using CsQuery;
 
 namespace SOCVRDotNet
 {
@@ -55,18 +56,21 @@ namespace SOCVRDotNet
 
         public UsersWatcher(IEnumerable<int> userIDs)
         {
-            fkey = UserDataFetcher.GetFKey();
             ReviewThroughput = 100;
+            fkey = UserDataFetcher.GetFKey();
+            EventManager = new EventManager();
             Users = new ConcurrentDictionary<int, User>();
+
+            var availableReviews = GetReviewsAvailable();
+
             foreach (var user in userIDs)
             {
-                Users[user] = new User(fkey, user, new UserReviewStatus
-                {
-                    ReviewsToday = FetchTodaysUserReviewCount(user)
-                });
+                Users[user] = new User(fkey, user);
+                Users[user].ReviewStatus.ReviewsToday = FetchTodaysUserReviewCount(user);
+                Users[user].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
                 Thread.Sleep(3000);
             }
-            EventManager = new EventManager();
+
             Task.Run(() => AttachWatcherEventListeners());
             Task.Run(() => ResetDailyReviews());
             Task.Run(() => HandleRequestQueue());
@@ -95,10 +99,8 @@ namespace SOCVRDotNet
         {
             if (Users.ContainsKey(userID)) { return; }
 
-            Users[userID] = new User(fkey, userID, new UserReviewStatus
-            {
-                ReviewsToday = FetchTodaysUserReviewCount(userID)
-            });
+            Users[userID] = new User(fkey, userID);
+            Users[userID].ReviewStatus.ReviewsToday = FetchTodaysUserReviewCount(userID);
         }
 
 
@@ -111,9 +113,12 @@ namespace SOCVRDotNet
 
                 reviewsRefreshMre.WaitOne(waitTime);
 
+                var availableReviews = GetReviewsAvailable();
+
                 foreach (var id in Users.Keys)
                 {
                     Users[id].ReviewStatus.ReviewsToday = 0;
+                    Users[id].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
                 }
             }
         }
@@ -148,11 +153,11 @@ namespace SOCVRDotNet
 
         private void HandleRequestQueue()
         {
-            var lastUser = new KeyValuePair<int, User>(0, new User("", 0, new UserReviewStatus()));
+            var lastUser = default(KeyValuePair<int, User>);
 
             while (!dispose)
             {
-                var user = new KeyValuePair<int, User>(0, new User("", 0, new UserReviewStatus()));
+                var user = default(KeyValuePair<int, User>);
                 var activeUsers = Users.Values.Count(x => x.ReviewStatus.QueuedReviews > 0);
 
                 foreach (var u in Users)
@@ -172,6 +177,29 @@ namespace SOCVRDotNet
                 lastUser = user;
                 reqHandlerMre.WaitOne(TimeSpan.FromSeconds((60D / ReviewThroughput) * clearedReviews));
             }
+        }
+
+        private int GetReviewsAvailable()
+        {
+            try
+            {
+                var doc = CQ.CreateFromUrl("http://stackoverflow.com/review/close/stats");
+                var statsTable = doc.Find("table.task-stat-table");
+                var cells = statsTable.Find("td");
+                var needReview = new string(cells.ElementAt(0).FirstElementChild.InnerText.Where(c => char.IsDigit(c)).ToArray());
+                var reviews = 0;
+
+                if (int.TryParse(needReview, out reviews))
+                {
+                    return reviews;
+                }
+            }
+            catch (Exception ex)
+            {
+                EventManager.CallListeners(UserEventType.InternalException, ex);
+            }
+
+            return -1;
         }
     }
 }

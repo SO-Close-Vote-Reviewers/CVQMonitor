@@ -30,10 +30,28 @@ namespace SOCVRDotNet
     {
         private DateTime lastReview;
         private HashSet<DateTime> reviews;
+        private Action reviewLimitReachedCallback;
+        private int reviewsCompleted;
 
         public int QueuedReviews { get; set; }
 
-        public int ReviewsToday { get; internal set; }
+        public int ReviewsToday
+        {
+            get
+            {
+                return reviewsCompleted;
+            }
+
+            internal set
+            {
+                if (value == ReviewLimit && reviewLimitReachedCallback != null)
+                {
+                    reviewLimitReachedCallback();
+                }
+
+                reviewsCompleted = value;
+            }
+        }
 
         public double AvgReviewsPerMin
         {
@@ -61,10 +79,13 @@ namespace SOCVRDotNet
             }
         }
 
+        internal int ReviewLimit { get; set; }
 
 
-        public UserReviewStatus()
+
+        public UserReviewStatus(Action reviewLimitReachedCallback)
         {
+            this.reviewLimitReachedCallback = reviewLimitReachedCallback;
             LastReview = DateTime.MinValue;
         }
     }

@@ -40,11 +40,11 @@ namespace SOCVRDotNet
 
 
 
-        public User(string fkey, int userID, UserReviewStatus reviewStatus)
+        public User(string fkey, int userID)
         {
             this.fkey = fkey;
             ID = userID;
-            ReviewStatus = reviewStatus;
+            ReviewStatus = new UserReviewStatus(() => EventManager.CallListeners(UserEventType.ReviewLimitReached));
             EventManager = new EventManager();
         }
 
