@@ -28,14 +28,16 @@ namespace SOCVRDotNet
 {
     public class UserReviewStatus
     {
-        private DateTime lastReview;
-        private HashSet<DateTime> reviews;
+        //private DateTime lastReview;
+        //private HashSet<DateTime> reviewTimestamps;
         private Action reviewLimitReachedCallback;
         private int reviewsCompleted;
 
         public int QueuedReviews { get; set; }
 
-        public int ReviewsToday
+        public HashSet<ReviewItem> Reviews { get; set; }
+
+        public int ReviewsCompletedCount
         {
             get
             {
@@ -53,40 +55,47 @@ namespace SOCVRDotNet
             }
         }
 
-        public double AvgReviewsPerMin
-        {
-            get
-            {
-                if (reviews.Count == 0) { return 0; }
-                reviews = new HashSet<DateTime>(reviews.Where(r => r.AddHours(2) > DateTime.UtcNow));
-                if (reviews.Count == 0) { return 0; }
-                return reviews.Count / (reviews.Max() - reviews.Min()).TotalMinutes;
-            }
-        }
+        // Do we even need this?
+        //public double AvgReviewsPerMin
+        //{
+        //    get
+        //    {
+        //        if (reviewTimestamps.Count == 0) { return 0; }
+        //        reviewTimestamps = new HashSet<DateTime>(reviewTimestamps.Where(r => r.AddHours(2) > DateTime.UtcNow));
+        //        if (reviewTimestamps.Count == 0) { return 0; }
+        //        return reviewTimestamps.Count / (reviewTimestamps.Max() - reviewTimestamps.Min()).TotalMinutes;
+        //    }
+        //}
 
-        internal DateTime LastReview
-        {
-            get
-            {
-                return lastReview;
-            }
+        // Do we even need this?
+        //internal DateTime LastReview
+        //{
+        //    get
+        //    {
+        //        return lastReview;
+        //    }
 
-            set
-            {
-                reviews.Add(value);
-                ReviewsToday++;
-                lastReview = value;
-            }
-        }
+        //    set
+        //    {
+        //        reviewTimestamps.Add(value);
+        //        ReviewsCompletedCount++;
+        //        lastReview = value;
+        //    }
+        //}
 
         internal int ReviewLimit { get; set; }
+
+        internal Dictionary<string, float> ReviewedTags { get; set; }
 
 
 
         public UserReviewStatus(Action reviewLimitReachedCallback)
         {
             this.reviewLimitReachedCallback = reviewLimitReachedCallback;
-            LastReview = DateTime.MinValue;
+            //reviewTimestamps = new HashSet<DateTime>();
+            Reviews = new HashSet<ReviewItem>();
+            ReviewedTags = new Dictionary<string, float>();
+            //LastReview = DateTime.MinValue;
         }
     }
 }

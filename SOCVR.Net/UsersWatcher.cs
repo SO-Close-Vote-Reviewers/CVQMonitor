@@ -66,13 +66,13 @@ namespace SOCVRDotNet
             foreach (var user in userIDs)
             {
                 Users[user] = new User(fkey, user);
-                Users[user].ReviewStatus.ReviewsToday = FetchTodaysUserReviewCount(user);
+                Users[user].ReviewStatus.ReviewsCompletedCount = FetchTodaysUserReviewCount(user);
                 Users[user].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
                 Thread.Sleep(3000);
             }
 
             Task.Run(() => AttachWatcherEventListeners());
-            Task.Run(() => ResetDailyReviews());
+            Task.Run(() => ResetDailyReviewData());
             Task.Run(() => HandleRequestQueue());
         }
 
@@ -100,12 +100,13 @@ namespace SOCVRDotNet
             if (Users.ContainsKey(userID)) { return; }
 
             Users[userID] = new User(fkey, userID);
-            Users[userID].ReviewStatus.ReviewsToday = FetchTodaysUserReviewCount(userID);
+            Users[userID].ReviewStatus.ReviewsCompletedCount = FetchTodaysUserReviewCount(userID);
+            Users[userID].ReviewStatus.ReviewLimit = GetReviewsAvailable() > 1000 ? 40 : 20;
         }
 
 
 
-        private void ResetDailyReviews()
+        private void ResetDailyReviewData()
         {
             while (!dispose)
             {
@@ -113,11 +114,13 @@ namespace SOCVRDotNet
 
                 reviewsRefreshMre.WaitOne(waitTime);
 
+                fkey = UserDataFetcher.GetFKey();
                 var availableReviews = GetReviewsAvailable();
 
                 foreach (var id in Users.Keys)
                 {
-                    Users[id].ReviewStatus.ReviewsToday = 0;
+                    Users[id].ReviewStatus.ReviewsCompletedCount = 0;
+                    Users[id].ReviewStatus.Reviews.Clear();
                     Users[id].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
                 }
             }
@@ -147,7 +150,7 @@ namespace SOCVRDotNet
                 if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) { return; }
 
                 Users[id].ReviewStatus.QueuedReviews++;
-                Users[id].ReviewStatus.LastReview = DateTime.UtcNow;
+                Users[id].ReviewStatus.ReviewsCompletedCount++;
             };
         }
 
@@ -160,10 +163,17 @@ namespace SOCVRDotNet
                 var user = default(KeyValuePair<int, User>);
                 var activeUsers = Users.Values.Count(x => x.ReviewStatus.QueuedReviews > 0);
 
+                if (activeUsers == 0)
+                {
+                    reqHandlerMre.WaitOne(1000);
+                    continue;
+                }
+
                 foreach (var u in Users)
                 {
-                    if (u.Value.ReviewStatus.QueuedReviews > user.Value.ReviewStatus.QueuedReviews &&
-                       (activeUsers > 1 ? u.Key != lastUser.Key : true))
+                    if (user.Value == null ||
+                        (u.Value.ReviewStatus.QueuedReviews > user.Value.ReviewStatus.QueuedReviews &&
+                        (activeUsers > 1 ? u.Key != lastUser.Key : true)))
                     {
                         user = u;
                     }

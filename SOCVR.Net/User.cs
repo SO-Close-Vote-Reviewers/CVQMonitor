@@ -30,6 +30,9 @@ namespace SOCVRDotNet
 {
     public class User
     {
+        private readonly Dictionary<string, DateTime> tagTimestamps = new Dictionary<string, DateTime>();
+        private List<string> prevTags;
+        private int reviewsSinceCurrentTags;
         private string fkey;
 
         public int ID { get; private set; }
@@ -57,6 +60,7 @@ namespace SOCVRDotNet
             foreach (var id in ids)
             {
                 var review = new ReviewItem(id, fkey);
+                ReviewStatus.Reviews.Add(review);
 
                 // Notify audit listeners if necessary.
                 if (review.AuditPassed != null)
@@ -67,12 +71,115 @@ namespace SOCVRDotNet
 
                     EventManager.CallListeners(type, review);
                 }
+                else
+                {
+                    CheckTags(review);
+                }
 
                 EventManager.CallListeners(UserEventType.ItemReviewed, review);
                 ReviewStatus.QueuedReviews--;
             }
 
             return ids.Count;
+        }
+
+        private void CheckTags(ReviewItem review)
+        {
+            var timestamp = review.Results.First(rr => rr.UserID == ID).Timestamp;
+
+            foreach (var tag in review.Tags)
+            {
+                if (ReviewStatus.ReviewedTags.ContainsKey(tag))
+                {
+                    ReviewStatus.ReviewedTags[tag]++;
+                }
+                else
+                {
+                    ReviewStatus.ReviewedTags[tag] = 1;
+                }
+
+                tagTimestamps[tag] = timestamp;
+            }
+
+            if (prevTags != null && prevTags.Count != 0)
+            {
+                if (prevTags.Any(t => review.Tags.Contains(t)))
+                {
+                    reviewsSinceCurrentTags = 0;
+                }
+                else
+                {
+                    reviewsSinceCurrentTags++;
+                }
+            }
+
+            // NOT ENOUGH DATAZ.
+            if (ReviewStatus.Reviews.Count < 9) { return; }
+
+            var tagsSum = ReviewStatus.ReviewedTags.Sum(t => t.Value);
+            var highKvs = ReviewStatus.ReviewedTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
+
+            // Not enough (accurate) data to continue analysis.
+            if (highKvs.Count == 0) { return; }
+
+            var maxTag = highKvs.Max(t => t.Value);
+            var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
+            var avgNoiseFloor = ReviewStatus.ReviewedTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
+            prevTags = prevTags ?? topTags;
+
+            // They've started reviewing a different tag.
+            if (topTags.Count > 3 ||
+                reviewsSinceCurrentTags >= 3 ||
+                topTags.Any(t => !prevTags.Contains(t)))
+            {
+                HandleTagChange(ref topTags, avgNoiseFloor);
+            }
+        }
+
+        private void HandleTagChange(ref List<string> topTags, float avgNoiseFloor)
+        {
+            try
+            {
+                while (topTags.Count > 3)
+                {
+                    var oldestTag = new KeyValuePair<string, DateTime>(null, DateTime.MaxValue);
+                    foreach (var tag in topTags)
+                    {
+                        if (tagTimestamps[tag] < oldestTag.Value)
+                        {
+                            oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
+                        }
+                    }
+                    ReviewStatus.ReviewedTags[oldestTag.Key] = avgNoiseFloor;
+                    topTags.Remove(oldestTag.Key);
+                }
+
+                List<string> finishedTags;
+
+                if (reviewsSinceCurrentTags >= 3)
+                {
+                    finishedTags = prevTags;
+                }
+                else
+                {
+                    var tt = topTags;
+                    finishedTags = prevTags.Where(t => !tt.Contains(t)).ToList();
+                }
+
+                EventManager.CallListeners(UserEventType.CurrentTagsChanged, finishedTags);
+
+                foreach (var tag in finishedTags)
+                {
+                    ReviewStatus.ReviewedTags[tag] = avgNoiseFloor;
+                }
+
+                prevTags = null;
+                reviewsSinceCurrentTags = 0;
+            }
+            catch (Exception ex)
+            {
+                EventManager.CallListeners(UserEventType.InternalException, ex);
+            }
         }
     }
 }
