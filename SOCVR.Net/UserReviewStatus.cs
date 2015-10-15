@@ -22,13 +22,22 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
-    public class UserReviewStatus
+    public class UserReviewStatus : IDisposable
     {
+        private readonly ManualResetEvent mre = new ManualResetEvent(false);
+        private EventManager evMan;
         private Action reviewLimitReachedCallback;
         private int reviewsCompleted;
+        private bool syncingReviewCount;
+        private bool dispose;
+
+        public int UserID { get; private set;}
 
         public int QueuedReviews { get; set; }
 
@@ -48,6 +57,11 @@ namespace SOCVRDotNet
                     reviewLimitReachedCallback();
                 }
 
+                if (value > ReviewLimit * 0.85 && !syncingReviewCount)
+                {
+                    SyncReviewCount();
+                }
+
                 reviewsCompleted = value;
             }
         }
@@ -58,11 +72,61 @@ namespace SOCVRDotNet
 
 
 
-        public UserReviewStatus(Action reviewLimitReachedCallback)
+        public UserReviewStatus(int userID, Action reviewLimitReachedCallback, ref EventManager eventManager)
         {
             this.reviewLimitReachedCallback = reviewLimitReachedCallback;
+            evMan = eventManager;
+            UserID = userID;
             Reviews = new HashSet<ReviewItem>();
             ReviewedTags = new Dictionary<string, float>();
+        }
+
+
+
+        public void Dispose()
+        {
+            if (dispose) { return; }
+            dispose = true;
+
+            mre.Set();
+
+            GC.SuppressFinalize(this);
+        }
+
+
+
+        private void SyncReviewCount()
+        {
+            syncingReviewCount = true;
+
+            Task.Run(() =>
+            {
+                var fkey = UserDataFetcher.GetFKey();
+
+                while (!dispose)
+                {
+                    ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
+
+                    var activeRevs = new HashSet<ReviewItem>();
+                    foreach (var rev in Reviews.OrderByDescending(r => r.Results.First(rr => rr.UserID == UserID).Timestamp))
+                    {
+                        if (activeRevs.Count < 5)
+                        {
+                            activeRevs.Add(rev);
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+
+                    var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                    var latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                    var wait = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
+
+                    mre.WaitOne(TimeSpan.FromMinutes(wait));
+                }
+            });
         }
     }
 }

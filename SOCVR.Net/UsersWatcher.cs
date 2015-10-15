@@ -24,8 +24,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using CsQuery;
@@ -34,15 +32,15 @@ namespace SOCVRDotNet
 {
     public class UsersWatcher : IDisposable
     {
-        private readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
         private readonly ManualResetEvent reviewsRefreshMre = new ManualResetEvent(false);
         private readonly ManualResetEvent reqHandlerMre = new ManualResetEvent(false);
+        private EventManager evMan;
         private string fkey;
         private bool dispose;
 
-        public ConcurrentDictionary<int, User> Users { get; private set; }
+        public EventManager EventManager { get { return evMan; } }
 
-        public EventManager EventManager { get; private set; }
+        public ConcurrentDictionary<int, User> Users { get; private set; }
 
         public int ReviewsCompleted { get; private set; }
 
@@ -58,7 +56,7 @@ namespace SOCVRDotNet
         {
             ReviewThroughput = 100;
             fkey = UserDataFetcher.GetFKey();
-            EventManager = new EventManager();
+            evMan = new EventManager();
             Users = new ConcurrentDictionary<int, User>();
 
             var availableReviews = GetReviewsAvailable();
@@ -66,7 +64,7 @@ namespace SOCVRDotNet
             foreach (var user in userIDs)
             {
                 Users[user] = new User(fkey, user);
-                Users[user].ReviewStatus.ReviewsCompletedCount = FetchTodaysUserReviewCount(user);
+                Users[user].ReviewStatus.ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, user, ref evMan);
                 Users[user].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
                 Thread.Sleep(3000);
             }
@@ -88,6 +86,11 @@ namespace SOCVRDotNet
             if (dispose) { return; }
             dispose = true;
 
+            foreach (var u in Users.Values)
+            {
+                u.Dispose();
+            }
+
             reqHandlerMre.Set();
             reviewsRefreshMre.Set();
             EventManager.Dispose();
@@ -100,7 +103,7 @@ namespace SOCVRDotNet
             if (Users.ContainsKey(userID)) { return; }
 
             Users[userID] = new User(fkey, userID);
-            Users[userID].ReviewStatus.ReviewsCompletedCount = FetchTodaysUserReviewCount(userID);
+            Users[userID].ReviewStatus.ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, userID, ref evMan);
             Users[userID].ReviewStatus.ReviewLimit = GetReviewsAvailable() > 1000 ? 40 : 20;
         }
 
@@ -121,22 +124,6 @@ namespace SOCVRDotNet
                 {
                     Users[id].ResetDailyData(fkey, availableReviews);
                 }
-            }
-        }
-
-        private int FetchTodaysUserReviewCount(int userID)
-        {
-            try
-            {
-                var html = new WebClient().DownloadString("http://stackoverflow.com/review/user-info/2/" + userID);
-                var match = todaysReviewCount.Match(html);
-                var reviewCount = int.Parse(new string(match.Value.Where(char.IsDigit).ToArray()));
-                return reviewCount;
-            }
-            catch (Exception ex)
-            {
-                EventManager.CallListeners(UserEventType.InternalException, ex);
-                return -1;
             }
         }
 
@@ -163,7 +150,7 @@ namespace SOCVRDotNet
 
                 if (activeUsers == 0)
                 {
-                    reqHandlerMre.WaitOne(1000);
+                    reqHandlerMre.WaitOne(500);
                     continue;
                 }
 

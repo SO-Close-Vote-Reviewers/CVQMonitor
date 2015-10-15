@@ -27,11 +27,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System;
 using System.Threading;
+using System.Text.RegularExpressions;
 
 namespace SOCVRDotNet
 {
     public static class UserDataFetcher
     {
+        private static readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+
+
         /// <summary>
         /// Fetches the latest close vote review data.
         /// </summary>
@@ -79,6 +84,8 @@ namespace SOCVRDotNet
             var fkeyE = dom["input"].FirstOrDefault(e => e.Attributes["name"] != null && e.Attributes["name"] == "fkey");
             return fkeyE == null ? null : fkeyE.Attributes["value"];
         }
+
+
 
         internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount)
         {
@@ -130,6 +137,20 @@ namespace SOCVRDotNet
             }
 
             return reviews;
+        }
+
+        internal static int FetchTodaysUserReviewCount(string fkey, int userID, ref EventManager evMan)
+        {
+            var html = new WebClient().DownloadString("http://stackoverflow.com/review/user-info/2/" + userID);
+            var match = todaysReviewCount.Match(html);
+            var reviewCount = -1;
+
+            if (int.TryParse(new string(match.Value.Where(char.IsDigit).ToArray()), out reviewCount))
+            {
+                evMan.CallListeners(UserEventType.InternalException, new Exception("Unable to parse ReviewCount string to int."));
+            }
+
+            return reviewCount;
         }
     }
 }

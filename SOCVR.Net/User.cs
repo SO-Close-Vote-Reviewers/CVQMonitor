@@ -26,31 +26,58 @@ using System.Linq;
 
 namespace SOCVRDotNet
 {
-    public class User
+    public class User :  IDisposable
     {
         private readonly Dictionary<string, DateTime> tagTimestamps = new Dictionary<string, DateTime>();
         private List<string> prevTags;
+        private EventManager evMan;
         private int reviewsSinceCurrentTags;
         private string fkey;
+        private bool dispose;
 
         public int ID { get; private set; }
 
         public UserReviewStatus ReviewStatus { get; private set; }
 
-        public EventManager EventManager { get; private set; }
+        public EventManager EventManager { get { return evMan; } }
 
 
 
         public User(string fkey, int userID)
         {
             this.fkey = fkey;
+            evMan = new EventManager();
             ID = userID;
-            ReviewStatus = new UserReviewStatus(() => EventManager.CallListeners(UserEventType.ReviewLimitReached));
-            EventManager = new EventManager();
+            ReviewStatus = new UserReviewStatus(
+                userID,
+                () => EventManager.CallListeners(UserEventType.ReviewLimitReached),
+                ref evMan);
+        }
+
+        ~User()
+        {
+            Dispose();
         }
 
 
 
+        public void Dispose()
+        {
+            if (dispose) { return; }
+            dispose = true;
+
+            ReviewStatus.Dispose();
+            EventManager.Dispose();
+
+            GC.SuppressFinalize(this);
+        }
+
+
+
+        /// <summary>
+        /// Fetches the latest (unprocessed) reviews from a user's profile.
+        /// </summary>
+        /// <returns>The total number of reviews fetched and processed.</returns>
         internal int ProcessReviews()
         {
             var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, ReviewStatus.QueuedReviews);

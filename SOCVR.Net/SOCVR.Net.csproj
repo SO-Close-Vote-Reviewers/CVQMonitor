@@ -54,11 +54,8 @@
     <Compile Include="GlobalDashboardWatcher.cs" />
     <Compile Include="ReviewAction.cs" />
     <Compile Include="ReviewItem.cs" />
-    <Compile Include="ReviewMonitor.cs" />
-    <Compile Include="ReviewMonitorPool.cs" />
     <Compile Include="ReviewResult.cs" />
     <Compile Include="ReviewQueue.cs" />
-    <Compile Include="TagMonitor.cs" />
     <Compile Include="User.cs" />
     <Compile Include="UserDataFetcher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
