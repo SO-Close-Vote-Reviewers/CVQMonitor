@@ -34,7 +34,7 @@ namespace SOCVRDotNet
         private EventManager evMan;
         private Action reviewLimitReachedCallback;
         private int reviewsCompleted;
-        private bool syncingReviewCount;
+        private bool syncingReviewData;
         private bool dispose;
 
         public int UserID { get; private set;}
@@ -42,6 +42,8 @@ namespace SOCVRDotNet
         public int QueuedReviews { get; set; }
 
         public HashSet<ReviewItem> Reviews { get; set; }
+
+        public List<ReviewItem> Audits { get; set; }
 
         public int ReviewsCompletedCount
         {
@@ -57,9 +59,9 @@ namespace SOCVRDotNet
                     reviewLimitReachedCallback();
                 }
 
-                if (value > ReviewLimit * 0.85 && !syncingReviewCount)
+                if (value > 0 && Reviews.Count > 4 && !syncingReviewData)
                 {
-                    SyncReviewCount();
+                    SyncReviewData();
                 }
 
                 reviewsCompleted = value;
@@ -78,6 +80,7 @@ namespace SOCVRDotNet
             evMan = eventManager;
             UserID = userID;
             Reviews = new HashSet<ReviewItem>();
+            Audits = new List<ReviewItem>();
             ReviewedTags = new Dictionary<string, float>();
         }
 
@@ -95,21 +98,23 @@ namespace SOCVRDotNet
 
 
 
-        private void SyncReviewCount()
+        private void SyncReviewData()
         {
-            syncingReviewCount = true;
+            syncingReviewData = true;
 
             Task.Run(() =>
             {
                 var fkey = UserDataFetcher.GetFKey();
                 var latestRevTime = DateTime.MaxValue;
-                var avg = 0D;
+                var avg = 1D;
 
                 while (!dispose &&
                        reviewsCompleted < ReviewLimit &&
                        (DateTime.UtcNow - latestRevTime).TotalMinutes < avg * 5)
                 {
                     ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
+
+                    CheckForAudits(fkey);
 
                     var activeRevs = new HashSet<ReviewItem>();
                     foreach (var rev in Reviews.OrderByDescending(r => r.Results.First(rr => rr.UserID == UserID).Timestamp))
@@ -124,15 +129,59 @@ namespace SOCVRDotNet
                         }
                     }
 
-                    var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
-                    latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
-                    avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
+                    if (activeRevs.Count > 0)
+                    {
+                        var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                        latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                        avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
+                    }
 
                     mre.WaitOne(TimeSpan.FromMinutes(avg));
                 }
 
-                syncingReviewCount = false;
+                syncingReviewData = false;
             });
+        }
+
+        private void CheckForAudits(string fkey)
+        {
+            var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, UserID, 5);
+            var auditIDs = new List<int>();
+
+            foreach (var id in ids)
+            {
+                if (Reviews.Any(r => r.ID == id))
+                {
+                    continue;
+                }
+                else
+                {
+                    auditIDs.Add(id);
+                }
+            }
+
+            // It's either empty or we've just been initialised.
+            if (auditIDs.Count == 0 || auditIDs.Count == 5) { return; }
+
+            foreach (var id in auditIDs)
+            {
+                var item = new ReviewItem(id, fkey);
+
+                if (item.AuditPassed == null ||
+                    (DateTime.UtcNow - item.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours > 1)
+                {
+                    continue;
+                }
+
+                Reviews.Add(item);
+                Audits.Add(item);
+
+                var type = item.AuditPassed == false
+                    ? UserEventType.AuditFailed
+                    : UserEventType.AuditPassed;
+
+                evMan.CallListeners(type, item);
+            }
         }
     }
 }

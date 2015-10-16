@@ -64,8 +64,8 @@ namespace SOCVRDotNet
             foreach (var user in userIDs)
             {
                 Users[user] = new User(fkey, user);
-                Users[user].ReviewStatus.ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, user, ref evMan);
                 Users[user].ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
+                Users[user].ReviewStatus.ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, user, ref evMan);
                 Thread.Sleep(3000);
             }
 
@@ -103,8 +103,8 @@ namespace SOCVRDotNet
             if (Users.ContainsKey(userID)) { return; }
 
             Users[userID] = new User(fkey, userID);
-            Users[userID].ReviewStatus.ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, userID, ref evMan);
             Users[userID].ReviewStatus.ReviewLimit = GetReviewsAvailable() > 1000 ? 40 : 20;
+            Users[userID].ReviewStatus.ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, userID, ref evMan);
         }
 
 

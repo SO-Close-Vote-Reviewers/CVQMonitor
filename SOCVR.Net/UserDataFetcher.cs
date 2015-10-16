@@ -145,7 +145,7 @@ namespace SOCVRDotNet
             var match = todaysReviewCount.Match(html);
             var reviewCount = -1;
 
-            if (int.TryParse(new string(match.Value.Where(char.IsDigit).ToArray()), out reviewCount))
+            if (!int.TryParse(new string(match.Value.Where(char.IsDigit).ToArray()), out reviewCount))
             {
                 evMan.CallListeners(UserEventType.InternalException, new Exception("Unable to parse ReviewCount string to int."));
             }

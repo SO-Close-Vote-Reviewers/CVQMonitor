@@ -87,19 +87,7 @@ namespace SOCVRDotNet
                 var review = new ReviewItem(id, fkey);
                 ReviewStatus.Reviews.Add(review);
 
-                // Notify audit listeners if necessary.
-                if (review.AuditPassed != null)
-                {
-                    var type = review.AuditPassed == false
-                        ? UserEventType.AuditFailed
-                        : UserEventType.AuditPassed;
-
-                    EventManager.CallListeners(type, review);
-                }
-                else
-                {
-                    CheckTags(review);
-                }
+                CheckTags(review);
 
                 EventManager.CallListeners(UserEventType.ItemReviewed, review);
                 ReviewStatus.QueuedReviews--;
