@@ -102,8 +102,12 @@ namespace SOCVRDotNet
             Task.Run(() =>
             {
                 var fkey = UserDataFetcher.GetFKey();
+                var latestRevTime = DateTime.MaxValue;
+                var avg = 0D;
 
-                while (!dispose)
+                while (!dispose &&
+                       reviewsCompleted < ReviewLimit &&
+                       (DateTime.UtcNow - latestRevTime).TotalMinutes < avg * 5)
                 {
                     ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
 
@@ -121,11 +125,13 @@ namespace SOCVRDotNet
                     }
 
                     var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
-                    var latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
-                    var wait = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
+                    latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                    avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
 
-                    mre.WaitOne(TimeSpan.FromMinutes(wait));
+                    mre.WaitOne(TimeSpan.FromMinutes(avg));
                 }
+
+                syncingReviewCount = false;
             });
         }
     }
