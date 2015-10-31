@@ -109,6 +109,18 @@ namespace SOCVRDotNet
 
 
 
+        private void AttachWatcherEventListeners()
+        {
+            GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
+            GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
+            {
+                if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) { return; }
+
+                Users[id].ReviewStatus.QueuedReviews++;
+                Users[id].ReviewStatus.ReviewsCompletedCount++;
+            };
+        }
+
         private void ResetDailyReviewData()
         {
             while (!dispose)
@@ -125,18 +137,6 @@ namespace SOCVRDotNet
                     Users[id].ResetDailyData(fkey, availableReviews);
                 }
             }
-        }
-
-        private void AttachWatcherEventListeners()
-        {
-            GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
-            GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
-            {
-                if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) { return; }
-
-                Users[id].ReviewStatus.QueuedReviews++;
-                Users[id].ReviewStatus.ReviewsCompletedCount++;
-            };
         }
 
         private void HandleRequestQueue()

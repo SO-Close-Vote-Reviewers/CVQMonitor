@@ -26,7 +26,7 @@ using System.Linq;
 
 namespace SOCVRDotNet
 {
-    public class User :  IDisposable
+    public class User : IDisposable
     {
         private readonly Dictionary<string, DateTime> tagTimestamps = new Dictionary<string, DateTime>();
         private List<string> prevTags;
