@@ -119,7 +119,8 @@ namespace SOCVRDotNet
                     var activeRevs = new HashSet<ReviewItem>();
                     foreach (var rev in Reviews.OrderByDescending(r => r.Results.First(rr => rr.UserID == UserID).Timestamp))
                     {
-                        if (activeRevs.Count < 5)
+                        if ((DateTime.UtcNow - rev.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours < 1 &&
+                            activeRevs.Count < 5)
                         {
                             activeRevs.Add(rev);
                         }
@@ -136,7 +137,7 @@ namespace SOCVRDotNet
                         avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
                     }
 
-                    mre.WaitOne(TimeSpan.FromMinutes(avg));
+                    mre.WaitOne(TimeSpan.FromMinutes(Math.Max(avg, 0.25)));
                 }
 
                 syncingReviewData = false;
@@ -160,7 +161,8 @@ namespace SOCVRDotNet
                 }
             }
 
-            // It's either empty or we've just been initialised.
+            // It's either empty or we've just been initialised
+            // (highly unlikely the user was given 5 audits consecutively).
             if (auditIDs.Count == 0 || auditIDs.Count == 5) { return; }
 
             foreach (var id in auditIDs)
