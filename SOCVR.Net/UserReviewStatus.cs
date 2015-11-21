@@ -88,7 +88,7 @@ namespace SOCVRDotNet
 
         public void Dispose()
         {
-            if (dispose) { return; }
+            if (dispose) return;
             dispose = true;
 
             mre.Set();
@@ -163,7 +163,7 @@ namespace SOCVRDotNet
 
             // It's either empty or we've just been initialised
             // (highly unlikely the user was given 5 audits consecutively).
-            if (auditIDs.Count == 0 || auditIDs.Count == 5) { return; }
+            if (auditIDs.Count == 0 || auditIDs.Count == 5) return;
 
             foreach (var id in auditIDs)
             {

@@ -50,9 +50,9 @@ namespace SOCVRDotNet
 
         internal void CallListeners(UserEventType eventType, params object[] args)
         {
-            if (disposed) { return; }
-            if (!ConnectedListeners.ContainsKey(eventType)) { return; }
-            if (ConnectedListeners[eventType].Keys.Count == 0) { return; }
+            if (disposed) return; 
+            if (!ConnectedListeners.ContainsKey(eventType)) return; 
+            if (ConnectedListeners[eventType].Keys.Count == 0) return; 
 
             foreach (var listener in ConnectedListeners[eventType].Values)
             {
@@ -64,10 +64,8 @@ namespace SOCVRDotNet
                     }
                     catch (Exception ex)
                     {
-                        if (eventType == UserEventType.InternalException)
-                        {
-                            throw ex;
-                        }
+                        if (eventType == UserEventType.InternalException) throw ex;
+
                         CallListeners(UserEventType.InternalException, ex);
                     }
                 });
@@ -76,7 +74,7 @@ namespace SOCVRDotNet
 
         public void Dispose()
         {
-            if (disposed) { return; }
+            if (disposed) return;
 
             disposed = true;
             if (ConnectedListeners != null)
@@ -88,7 +86,7 @@ namespace SOCVRDotNet
 
         public void ConnectListener(UserEventType eventType, Delegate listener)
         {
-            if (disposed) { return; }
+            if (disposed) return;
 
             if (!ConnectedListeners.ContainsKey(eventType))
             {
@@ -112,9 +110,9 @@ namespace SOCVRDotNet
 
         public void DisconnectListener(UserEventType eventType, Delegate listener)
         {
-            if (disposed) { return; }
-            if (!ConnectedListeners.ContainsKey(eventType)) { throw new KeyNotFoundException(); }
-            if (!ConnectedListeners[eventType].Values.Contains(listener)) { throw new KeyNotFoundException(); }
+            if (disposed) return;
+            if (!ConnectedListeners.ContainsKey(eventType)) throw new KeyNotFoundException();
+            if (!ConnectedListeners[eventType].Values.Contains(listener)) throw new KeyNotFoundException();
 
             var key = ConnectedListeners[eventType].Where(x => x.Value == listener).First().Key;
             Delegate temp;

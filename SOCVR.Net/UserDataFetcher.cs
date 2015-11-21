@@ -51,9 +51,9 @@ namespace SOCVRDotNet
             while (reviews.Count < reviewCount)
             {
                 currentPageNo++;
-                var reqUrl = "http://stackoverflow.com/ajax/users/tab/" + userID + "?tab=activity&sort=reviews&page=" + currentPageNo;
+                var reqUrl = $"http://stackoverflow.com/ajax/users/tab/{userID}?tab=activity&sort=reviews&page={currentPageNo}";
                 var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString(reqUrl);
-                if (pageHtml.Contains("This user has no reviews") && pageHtml.Length < 3000) { break; }
+                if (pageHtml.Contains("This user has no reviews") && pageHtml.Length < 3000) break;
                 var dom = CQ.Create(pageHtml);
 
                 foreach (var j in dom["td"])
@@ -69,7 +69,7 @@ namespace SOCVRDotNet
                     var reviewID = url.Remove(0, url.LastIndexOf('/') + 1);
                     var id = int.Parse(reviewID);
 
-                    if (reviews.Any(r => r.ID == id) || reviews.Count >= reviewCount) { continue; }
+                    if (reviews.Any(r => r.ID == id) || reviews.Count >= reviewCount) continue;
                     reviews.Add(new ReviewItem(id, fkey));
                 }
             }
@@ -81,15 +81,15 @@ namespace SOCVRDotNet
         {
             var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");
             var dom = CQ.Create(html);
-            var fkeyE = dom["input"].FirstOrDefault(e => e.Attributes["name"] != null && e.Attributes["name"] == "fkey");
-            return fkeyE == null ? null : fkeyE.Attributes["value"];
+            var fkeyE = dom["input"].FirstOrDefault(e => e?.Attributes["name"] == "fkey");
+            return fkeyE?.Attributes["value"];
         }
 
 
 
         internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount)
         {
-            if (reviewCount < 1) { throw new ArgumentOutOfRangeException("reviewCount", "Must be more than 0."); }
+            if (reviewCount < 1) throw new ArgumentOutOfRangeException("reviewCount", "Must be more than 0.");
 
             var reviews = new List<int>();
             var page = 1;
@@ -98,9 +98,8 @@ namespace SOCVRDotNet
             {
                 while (reviews.Count < reviewCount)
                 {
-                    var reqUrl = "http://stackoverflow.com/ajax/users/tab/" + userID + "?tab=activity&sort=reviews&page=" + page;
-                    var pageHtml = new WebClient { Encoding = Encoding.UTF8 }.DownloadString(reqUrl);
-                    var dom = CQ.Create(pageHtml);
+                    var reqUrl = $"http://stackoverflow.com/ajax/users/tab/{userID}?tab=activity&sort=reviews&page={page}";
+                    var dom = CQ.CreateFromUrl(reqUrl);
 
                     foreach (var j in dom["td"])
                     {
@@ -115,9 +114,9 @@ namespace SOCVRDotNet
                         var reviewID = url.Remove(0, url.LastIndexOf('/') + 1);
                         var id = int.Parse(reviewID);
 
-                        if (reviews.Contains(id)) { continue; }
+                        if (reviews.Contains(id)) continue;
                         reviews.Add(id);
-                        if (reviews.Count == reviewCount) { break; }
+                        if (reviews.Count == reviewCount) break;
                     }
 
                     page++;

@@ -61,7 +61,7 @@ namespace SOCVRDotNet
 
         private static void HandleMessage(string message)
         {
-            if (string.IsNullOrEmpty(message)) { return; }
+            if (string.IsNullOrEmpty(message)) return;
 
             try
             {
@@ -81,14 +81,14 @@ namespace SOCVRDotNet
 
         private static void HandleException(Exception ex)
         {
-            if (OnException == null) { throw ex; }
+            if (OnException == null) throw ex;
 
             OnException(ex);
         }
 
         private static void HandleClose(CloseEventArgs e)
         {
-            if (e.WasClean || e.Code == (ushort)CloseStatusCode.Normal || cleanUp) { return; }
+            if (e.WasClean || e.Code == (ushort)CloseStatusCode.Normal || cleanUp) return;
 
             InitialiseWS();
         }

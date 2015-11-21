@@ -65,8 +65,8 @@ namespace SOCVRDotNet
             {
                 var data = new NameValueCollection
                 {
-                    { "taskTypeId", "2" },
-                    { "fkey" , fkey }
+                    ["taskTypeId"] = "2",
+                    ["fkey"] = fkey
                 };
 
                 res = Encoding.UTF8.GetString(wb.UploadValues("http://stackoverflow.com/review/next-task/" + reviewID, "POST", data));
@@ -95,7 +95,7 @@ namespace SOCVRDotNet
 
                 foreach (var j in i.ChildElements)
                 {
-                    if (j.Attributes["title"] == "moderator") { continue; }
+                    if (j.Attributes["title"] == "moderator") continue;
 
                     if (j.Attributes["href"] != null && j.Attributes["href"].StartsWith(@"/users/"))
                     {

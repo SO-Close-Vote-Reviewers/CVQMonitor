@@ -145,7 +145,7 @@ namespace SOCVRDotNet
             }
 
             // NOT ENOUGH DATAZ.
-            if (ReviewStatus.Reviews.Count < 9) { return; }
+            if (ReviewStatus.Reviews.Count < 9) return;
 
             var tagsSum = ReviewStatus.ReviewedTags.Sum(t => t.Value);
             var highKvs = ReviewStatus.ReviewedTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);

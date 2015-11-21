@@ -83,7 +83,7 @@ namespace SOCVRDotNet
 
         public void Dispose()
         {
-            if (dispose) { return; }
+            if (dispose) return;
             dispose = true;
 
             foreach (var u in Users.Values)
@@ -100,7 +100,7 @@ namespace SOCVRDotNet
 
         public void AddUser(int userID)
         {
-            if (Users.ContainsKey(userID)) { return; }
+            if (Users.ContainsKey(userID)) return;
 
             Users[userID] = new User(fkey, userID);
             Users[userID].ReviewStatus.ReviewLimit = GetReviewsAvailable() > 1000 ? 40 : 20;
@@ -114,7 +114,7 @@ namespace SOCVRDotNet
             GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
             {
-                if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) { return; }
+                if (q != ReviewQueue.CloseVotes || !Users.ContainsKey(id) || dispose) return;
 
                 Users[id].ReviewStatus.QueuedReviews++;
                 Users[id].ReviewStatus.ReviewsCompletedCount++;
