@@ -104,40 +104,47 @@ namespace SOCVRDotNet
 
             Task.Run(() =>
             {
-                var fkey = UserDataFetcher.GetFKey();
-                var latestRevTime = DateTime.MaxValue;
-                var avg = 1D;
-
-                while (!dispose &&
-                       reviewsCompleted < ReviewLimit &&
-                       (DateTime.UtcNow - latestRevTime).TotalMinutes < avg * 5)
+                try
                 {
-                    ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
+                    var fkey = UserDataFetcher.GetFKey();
+                    var latestRevTime = DateTime.MaxValue;
+                    var avg = 1D;
 
-                    CheckForAudits(fkey);
-
-                    var activeRevs = new HashSet<ReviewItem>();
-                    foreach (var rev in Reviews.OrderByDescending(r => r.Results.First(rr => rr.UserID == UserID).Timestamp))
+                    while (!dispose &&
+                           reviewsCompleted < ReviewLimit &&
+                           (DateTime.UtcNow - latestRevTime).TotalMinutes < avg * 5)
                     {
-                        if ((DateTime.UtcNow - rev.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours < 1 &&
-                            activeRevs.Count < 5)
-                        {
-                            activeRevs.Add(rev);
-                        }
-                        else
-                        {
-                            break;
-                        }
-                    }
+                        ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
 
-                    if (activeRevs.Count > 0)
-                    {
-                        var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
-                        latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
-                        avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
-                    }
+                        CheckForAudits(fkey);
 
-                    mre.WaitOne(TimeSpan.FromMinutes(Math.Max(avg, 0.25)));
+                        var activeRevs = new HashSet<ReviewItem>();
+                        foreach (var rev in Reviews.OrderByDescending(r => r.Results.First(rr => rr.UserID == UserID).Timestamp))
+                        {
+                            if ((DateTime.UtcNow - rev.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours < 1 &&
+                                activeRevs.Count < 5)
+                            {
+                                activeRevs.Add(rev);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+
+                        if (activeRevs.Count > 0)
+                        {
+                            var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                            latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
+                            avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
+                        }
+
+                        mre.WaitOne(TimeSpan.FromMinutes(Math.Max(avg, 0.25)));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    evMan.CallListeners(UserEventType.InternalException, ex);
                 }
 
                 syncingReviewData = false;
@@ -146,43 +153,50 @@ namespace SOCVRDotNet
 
         private void CheckForAudits(string fkey)
         {
-            var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, UserID, 5);
-            var auditIDs = new List<int>();
-
-            foreach (var id in ids)
+            try
             {
-                if (Reviews.Any(r => r.ID == id))
+                var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, UserID, 5);
+                var auditIDs = new List<int>();
+
+                foreach (var id in ids)
                 {
-                    continue;
+                    if (Reviews.Any(r => r.ID == id))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        auditIDs.Add(id);
+                    }
                 }
-                else
+
+                // It's either empty or we've just been initialised
+                // (highly unlikely the user was given 5 audits consecutively).
+                if (auditIDs.Count == 0 || auditIDs.Count == 5) return;
+
+                foreach (var id in auditIDs)
                 {
-                    auditIDs.Add(id);
+                    var item = new ReviewItem(id, fkey);
+
+                    if (item.AuditPassed == null ||
+                        (DateTime.UtcNow - item.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours > 1)
+                    {
+                        continue;
+                    }
+
+                    Reviews.Add(item);
+                    Audits.Add(item);
+
+                    var type = item.AuditPassed == false
+                        ? UserEventType.AuditFailed
+                        : UserEventType.AuditPassed;
+
+                    evMan.CallListeners(type, item);
                 }
             }
-
-            // It's either empty or we've just been initialised
-            // (highly unlikely the user was given 5 audits consecutively).
-            if (auditIDs.Count == 0 || auditIDs.Count == 5) return;
-
-            foreach (var id in auditIDs)
+            catch (Exception ex)
             {
-                var item = new ReviewItem(id, fkey);
-
-                if (item.AuditPassed == null ||
-                    (DateTime.UtcNow - item.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours > 1)
-                {
-                    continue;
-                }
-
-                Reviews.Add(item);
-                Audits.Add(item);
-
-                var type = item.AuditPassed == false
-                    ? UserEventType.AuditFailed
-                    : UserEventType.AuditPassed;
-
-                evMan.CallListeners(type, item);
+                evMan.CallListeners(UserEventType.InternalException, ex);
             }
         }
     }

@@ -125,16 +125,23 @@ namespace SOCVRDotNet
         {
             while (!dispose)
             {
-                var waitTime = (int)(24 - DateTime.UtcNow.TimeOfDay.TotalHours) * 3600 * 1000;
-
-                reviewsRefreshMre.WaitOne(waitTime);
-
-                fkey = UserDataFetcher.GetFKey();
-                var availableReviews = GetReviewsAvailable();
-
-                foreach (var id in Users.Keys)
+                try
                 {
-                    Users[id].ResetDailyData(fkey, availableReviews);
+                    var waitTime = (int)(24 - DateTime.UtcNow.TimeOfDay.TotalHours) * 3600 * 1000;
+
+                    reviewsRefreshMre.WaitOne(waitTime);
+
+                    fkey = UserDataFetcher.GetFKey();
+                    var availableReviews = GetReviewsAvailable();
+
+                    foreach (var id in Users.Keys)
+                    {
+                        Users[id].ResetDailyData(fkey, availableReviews);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    EventManager.CallListeners(UserEventType.InternalException, ex);
                 }
             }
         }
@@ -145,32 +152,39 @@ namespace SOCVRDotNet
 
             while (!dispose)
             {
-                var user = default(KeyValuePair<int, User>);
-                var activeUsers = Users.Values.Count(x => x.ReviewStatus.QueuedReviews > 0);
-
-                if (activeUsers == 0)
+                try
                 {
-                    reqHandlerMre.WaitOne(500);
-                    continue;
-                }
+                    var user = default(KeyValuePair<int, User>);
+                    var activeUsers = Users.Values.Count(x => x.ReviewStatus.QueuedReviews > 0);
 
-                foreach (var u in Users)
-                {
-                    if (user.Value == null ||
-                        (u.Value.ReviewStatus.QueuedReviews > user.Value.ReviewStatus.QueuedReviews &&
-                        (activeUsers > 1 ? u.Key != lastUser.Key : true)))
+                    if (activeUsers == 0)
                     {
-                        user = u;
+                        reqHandlerMre.WaitOne(500);
+                        continue;
                     }
+
+                    foreach (var u in Users)
+                    {
+                        if (user.Value == null ||
+                            (u.Value.ReviewStatus.QueuedReviews > user.Value.ReviewStatus.QueuedReviews &&
+                            (activeUsers > 1 ? u.Key != lastUser.Key : true)))
+                        {
+                            user = u;
+                        }
+                    }
+
+                    // Let the User object take control here
+                    // and make/process the reviews (along with
+                    // decrementing the QueuedReviews counter).
+                    var clearedReviews = user.Value.ProcessReviews();
+
+                    lastUser = user;
+                    reqHandlerMre.WaitOne(TimeSpan.FromSeconds((60D / ReviewThroughput) * clearedReviews));
                 }
-
-                // Let the User object take control here
-                // and make/process the reviews (along with
-                // decrementing the QueuedReviews counter).
-                var clearedReviews = user.Value.ProcessReviews();
-
-                lastUser = user;
-                reqHandlerMre.WaitOne(TimeSpan.FromSeconds((60D / ReviewThroughput) * clearedReviews));
+                catch (Exception ex)
+                {
+                    EventManager.CallListeners(UserEventType.InternalException, ex);
+                }
             }
         }
 
