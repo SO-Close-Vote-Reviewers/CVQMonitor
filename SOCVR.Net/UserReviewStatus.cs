@@ -132,14 +132,16 @@ namespace SOCVRDotNet
                             }
                         }
 
-                        if (activeRevs.Count > 0)
+                        // DavidG saves the day.
+                        if (activeRevs.Count > 1)
                         {
                             var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
                             latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
                             avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
+                            avg = Math.Min(Math.Max(avg, 0.25), 12.5);
                         }
 
-                        mre.WaitOne(TimeSpan.FromMinutes(Math.Max(avg, 0.25)));
+                        mre.WaitOne(TimeSpan.FromMinutes(avg));
                     }
                 }
                 catch (Exception ex)
