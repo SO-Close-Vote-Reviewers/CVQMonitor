@@ -114,15 +114,15 @@ namespace SOCVRDotNet
                            reviewsCompleted < ReviewLimit &&
                            (DateTime.UtcNow - latestRevTime).TotalMinutes < avg * 5)
                     {
-                        ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
-
                         CheckForAudits(fkey);
+
+                        ReviewsCompletedCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, UserID, ref evMan);
 
                         var activeRevs = new HashSet<ReviewItem>();
                         foreach (var rev in Reviews.OrderByDescending(r => r.Results.First(rr => rr.UserID == UserID).Timestamp))
                         {
-                            if ((DateTime.UtcNow - rev.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours < 1 &&
-                                activeRevs.Count < 5)
+                            if ((DateTime.UtcNow - rev.Results.First(rr => rr.UserID == UserID).Timestamp).TotalHours < 0.5 &&
+                                activeRevs.Count < 3)
                             {
                                 activeRevs.Add(rev);
                             }
@@ -132,13 +132,13 @@ namespace SOCVRDotNet
                             }
                         }
 
-                        // DavidG saves the day.
-                        if (activeRevs.Count > 1)
+                        // DavidG saves the day, again.
+                        if (activeRevs.Count == 3)
                         {
                             var firstRevTime = activeRevs.Min(x => x.Results.First(r => r.UserID == UserID).Timestamp);
                             latestRevTime = activeRevs.Max(x => x.Results.First(r => r.UserID == UserID).Timestamp);
                             avg = activeRevs.Count / (latestRevTime - firstRevTime).TotalMinutes;
-                            avg = Math.Min(Math.Max(avg, 0.25), 12.5);
+                            avg = Math.Min(Math.Max(avg, 0.25), 6);
                         }
 
                         mre.WaitOne(TimeSpan.FromMinutes(avg));
