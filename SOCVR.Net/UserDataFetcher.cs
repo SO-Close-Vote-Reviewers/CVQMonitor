@@ -44,7 +44,7 @@ namespace SOCVRDotNet
         /// <param name="reviewCount">The number of reviews to fetch.</param>
         public static List<ReviewItem> FetchReviews(int userID, int reviewCount = 10)
         {
-            var fkey = GetFKey();
+            var fkey = GetFkey();
             var currentPageNo = 0;
             var reviews = new List<ReviewItem>();
 
@@ -77,7 +77,7 @@ namespace SOCVRDotNet
             return reviews;
         }
 
-        public static string GetFKey()
+        public static string GetFkey()
         {
             var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");
             var dom = CQ.Create(html);
@@ -87,7 +87,7 @@ namespace SOCVRDotNet
 
 
 
-        internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount)
+        internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount, Action throttler = null)
         {
             if (reviewCount < 1) throw new ArgumentOutOfRangeException("reviewCount", "Must be more than 0.");
 
@@ -98,6 +98,7 @@ namespace SOCVRDotNet
             {
                 while (reviews.Count < reviewCount)
                 {
+                    if (throttler != null) throttler();
                     var reqUrl = $"http://stackoverflow.com/ajax/users/tab/{userID}?tab=activity&sort=reviews&page={page}";
                     var dom = CQ.CreateFromUrl(reqUrl);
 

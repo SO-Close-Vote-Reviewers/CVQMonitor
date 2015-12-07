@@ -23,35 +23,54 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
     public class User : IDisposable
     {
-        private readonly Dictionary<string, DateTime> tagTimestamps = new Dictionary<string, DateTime>();
-        private List<string> prevTags;
-        private EventManager evMan;
-        private int reviewsSinceCurrentTags;
-        private string fkey;
+        private readonly ManualResetEvent scraperThrottleMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent quiestScraperThrottleMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
+        private EventManager evMan = new EventManager();
+        private Stack<int> revIDCache = new Stack<int>();
+        private DateTime lastPing;
+        private bool resetScraper;
+        private bool resetQScraper;
+        private bool scraperResetDone = true;
+        private bool qScraperResetDone = true;
+        private bool scraping;
         private bool dispose;
+        private string fkey;
+
+        public EventManager EventManager => evMan;
+
+        public HashSet<ReviewItem> Reviews { get; } = new HashSet<ReviewItem>();
+
+        public int CompletedReviewsCount { get; private set; }
 
         public int ID { get; private set; }
 
-        public UserReviewStatus ReviewStatus { get; private set; }
-
-        public EventManager EventManager { get { return evMan; } }
 
 
-
-        public User(string fkey, int userID)
+        public User(int userID)
         {
-            this.fkey = fkey;
-            evMan = new EventManager();
             ID = userID;
-            ReviewStatus = new UserReviewStatus(
-                userID,
-                () => EventManager.CallListeners(UserEventType.ReviewLimitReached),
-                ref evMan);
+            GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
+            GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
+            {
+                if (q != ReviewQueue.CloseVotes || id != ID || dispose) return;
+
+                lastPing = DateTime.UtcNow;
+
+                if (scraping) return;
+                scraping = true;
+
+                Task.Run(() => ScrapeData());
+            };
+
+            Task.Run(() => ResetDailyData());
         }
 
         ~User()
@@ -63,154 +82,147 @@ namespace SOCVRDotNet
 
         public void Dispose()
         {
-            if (dispose) { return; }
+            if (dispose) return;
             dispose = true;
 
-            ReviewStatus.Dispose();
-            EventManager.Dispose();
+            scraperThrottleMre.Set();
 
             GC.SuppressFinalize(this);
         }
 
 
 
-        /// <summary>
-        /// Fetches the latest (unprocessed) reviews from a user's profile.
-        /// </summary>
-        /// <returns>The total number of reviews fetched and processed.</returns>
-        internal int ProcessReviews()
+        private void ResetDailyData()
         {
-            var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, ReviewStatus.QueuedReviews);
-
-            foreach (var id in ids)
+            while (!dispose)
             {
-                var review = new ReviewItem(id, fkey);
-                ReviewStatus.Reviews.Add(review);
+                var wait = TimeSpan.FromHours(24 - DateTime.UtcNow.TimeOfDay.TotalHours);
 
-                CheckTags(review);
+                dailyResetMre.WaitOne(wait);
 
-                EventManager.CallListeners(UserEventType.ItemReviewed, review);
-                ReviewStatus.QueuedReviews--;
-            }
+                resetScraper = true;
+                resetQScraper = true;
+                Reviews.Clear();
+                fkey = RequestThrottler.FkeyCached;
 
-            return ids.Count;
-        }
-
-        internal void ResetDailyData(string fkey, int availableReviews)
-        {
-            this.fkey = fkey;
-
-            // Misc. review data
-            ReviewStatus.Reviews.Clear();
-            ReviewStatus.ReviewsCompletedCount = 0;
-            ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
-
-            // Tag data.
-            prevTags = null;
-            reviewsSinceCurrentTags = 0;
-            tagTimestamps.Clear();
-            ReviewStatus.ReviewedTags.Clear();
-        }
-
-
-
-        private void CheckTags(ReviewItem review)
-        {
-            var timestamp = review.Results.First(rr => rr.UserID == ID).Timestamp;
-
-            foreach (var tag in review.Tags)
-            {
-                if (ReviewStatus.ReviewedTags.ContainsKey(tag))
+                while (!scraperResetDone || !qScraperResetDone)
                 {
-                    ReviewStatus.ReviewedTags[tag]++;
-                }
-                else
-                {
-                    ReviewStatus.ReviewedTags[tag] = 1;
+                    // Yes yes, I know we shouldn't use Thread.Sleep(), yada yada yada.
+                    Thread.Sleep(1000);
                 }
 
-                tagTimestamps[tag] = timestamp;
-            }
-
-            if (prevTags != null && prevTags.Count != 0)
-            {
-                if (prevTags.Any(t => review.Tags.Contains(t)))
-                {
-                    reviewsSinceCurrentTags = 0;
-                }
-                else
-                {
-                    reviewsSinceCurrentTags++;
-                }
-            }
-
-            // NOT ENOUGH DATAZ.
-            if (ReviewStatus.Reviews.Count < 9) return;
-
-            var tagsSum = ReviewStatus.ReviewedTags.Sum(t => t.Value);
-            var highKvs = ReviewStatus.ReviewedTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
-
-            // Not enough (accurate) data to continue analysis.
-            if (highKvs.Count == 0) { return; }
-
-            var maxTag = highKvs.Max(t => t.Value);
-            var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
-            var avgNoiseFloor = ReviewStatus.ReviewedTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
-            prevTags = prevTags ?? topTags;
-
-            // They've started reviewing a different tag.
-            if (topTags.Count > 3 ||
-                reviewsSinceCurrentTags >= 3 ||
-                topTags.Any(t => !prevTags.Contains(t)))
-            {
-                HandleTagChange(ref topTags, avgNoiseFloor);
+                resetScraper = false;
+                resetQScraper = false;
             }
         }
 
-        private void HandleTagChange(ref List<string> topTags, float avgNoiseFloor)
+        private void ScrapeData()
         {
+            RequestThrottler.LiveUserInstances++;
+            scraperResetDone = false;
+            var lastRev = lastPing;
+            var throttle = new Action(() => scraperThrottleMre.WaitOne(GetThrottlePeriod()));
+            var revLimit = -1;
+
             try
             {
-                while (topTags.Count > 3)
+                revLimit = (RequestThrottler.ReviewsAvailableCached ?? 1000) >= 1000 ? 40 : 20;
+
+                while ((DateTime.UtcNow - lastRev).TotalMinutes < 5 && !resetScraper && !dispose)
                 {
-                    var oldestTag = new KeyValuePair<string, DateTime>(null, DateTime.MaxValue);
-                    foreach (var tag in topTags)
+                    var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, revLimit, throttle)
+                        .Where(id => Reviews.All(r => r.ID != id));
+
+                    foreach (var id in ids) ProcessReview(id, revLimit, throttle);
+
+                    throttle();
+                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+
+                    if (CompletedReviewsCount >= revLimit)
                     {
-                        if (tagTimestamps[tag] < oldestTag.Value)
-                        {
-                            oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
-                        }
+                        evMan.CallListeners(UserEventType.ReviewLimitReached, Reviews);
+                        break;
                     }
-                    ReviewStatus.ReviewedTags[oldestTag.Key] = avgNoiseFloor;
-                    topTags.Remove(oldestTag.Key);
                 }
-
-                List<string> finishedTags;
-
-                if (reviewsSinceCurrentTags >= 3)
-                {
-                    finishedTags = prevTags;
-                }
-                else
-                {
-                    var tt = topTags;
-                    finishedTags = prevTags.Where(t => !tt.Contains(t)).ToList();
-                }
-
-                EventManager.CallListeners(UserEventType.CurrentTagsChanged, finishedTags);
-
-                foreach (var tag in finishedTags)
-                {
-                    ReviewStatus.ReviewedTags[tag] = avgNoiseFloor;
-                }
-
-                prevTags = null;
-                reviewsSinceCurrentTags = 0;
             }
             catch (Exception ex)
             {
-                EventManager.CallListeners(UserEventType.InternalException, ex);
+                evMan.CallListeners(UserEventType.InternalException, ex);
             }
+
+            // If the user hasn't used all their reviews
+            // and if they're inactive and if we successfully
+            // managed to fetch the total reviews available count,
+            // fire off the quiet scraper (safeguard against missing
+            // any reviews (namely audits of deleted posts) which we
+            // may have missed).
+            if (revLimit != -1 && CompletedReviewsCount < revLimit && !resetScraper)
+            {
+                Task.Run(() => QuietScraper());
+            }
+
+            scraperResetDone = true;
+            scraping = false;
+            RequestThrottler.LiveUserInstances--;
+        }
+
+        private void ProcessReview(int reviewID, int revLimit, Action throttle)
+        {
+            // ID cache control.
+            if (revIDCache.Contains(reviewID)) return;
+            revIDCache.Push(reviewID);
+            while (revIDCache.Count > revLimit) revIDCache.Pop();
+
+            throttle();
+            var rev = new ReviewItem(reviewID, fkey);
+
+            if (rev.Results.FirstOrDefault(r => r.UserID == ID)?.Timestamp.Day == DateTime.UtcNow.Day)
+            {
+                Reviews.Add(rev);
+
+                if (rev.AuditPassed != null)
+                {
+                    var evType = rev.AuditPassed == true ?
+                        UserEventType.AuditPassed :
+                        UserEventType.AuditFailed;
+
+                    evMan.CallListeners(evType, rev);
+                }
+
+                evMan.CallListeners(UserEventType.ItemReviewed, rev);
+            }
+        }
+
+        private void QuietScraper()
+        {
+            RequestThrottler.LiveUserInstances += 0.5F;
+            qScraperResetDone = false;
+
+            try
+            {
+                // No need to continue scraping if the main scraper is active.
+                while ((DateTime.UtcNow - lastPing).TotalMinutes > 5 && !resetQScraper && !dispose)
+                {
+                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+
+                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(2));
+                }
+            }
+            catch (Exception ex)
+            {
+                evMan.CallListeners(UserEventType.InternalException, ex);
+            }
+
+            qScraperResetDone = true;
+            RequestThrottler.LiveUserInstances -= 0.5F;
+        }
+
+        private TimeSpan GetThrottlePeriod(float multiplier = 1)
+        {
+            var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
+            var secsPerReq = Math.Max(60 / reqsPerMin, 5) * multiplier;
+
+            return TimeSpan.FromSeconds(secsPerReq);
         }
     }
 }
