@@ -57,12 +57,10 @@
     <Compile Include="ReviewItem.cs" />
     <Compile Include="ReviewResult.cs" />
     <Compile Include="ReviewQueue.cs" />
-    <Compile Include="OLDUser.cs" />
     <Compile Include="UserDataFetcher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="UserEventType.cs" />
     <Compile Include="UserReviewStatus.cs" />
-    <Compile Include="UsersWatcher.cs" />
     <Compile Include="User.cs" />
   </ItemGroup>
   <ItemGroup>

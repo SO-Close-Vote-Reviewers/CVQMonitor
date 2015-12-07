@@ -87,7 +87,7 @@ namespace SOCVRDotNet
 
 
 
-        internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount)
+        internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount, Action throttler = null)
         {
             if (reviewCount < 1) throw new ArgumentOutOfRangeException("reviewCount", "Must be more than 0.");
 
@@ -98,6 +98,7 @@ namespace SOCVRDotNet
             {
                 while (reviews.Count < reviewCount)
                 {
+                    if (throttler != null) throttler();
                     var reqUrl = $"http://stackoverflow.com/ajax/users/tab/{userID}?tab=activity&sort=reviews&page={page}";
                     var dom = CQ.CreateFromUrl(reqUrl);
 

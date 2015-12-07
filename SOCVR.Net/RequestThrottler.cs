@@ -21,14 +21,18 @@
 
 
 using System;
+using System.Linq;
+using CsQuery;
 
 namespace SOCVRDotNet
 {
     public static class RequestThrottler
     {
-        private static float reqTp = 100;
+        private static float reqTp = 60;
         private static string fkey;
+        private static int? revCount = 0;
         private static DateTime lastFkeyFetch = DateTime.UtcNow;
+        private static DateTime lastRevCountFetch = DateTime.UtcNow;
 
         internal static string FkeyCached
         {
@@ -44,12 +48,40 @@ namespace SOCVRDotNet
             }
         }
 
-        internal static int LiveUserInstances { get; set; }
+        internal static int? ReviewsAvailableCached
+        {
+            get
+            {
+                if (DateTime.UtcNow.Day != lastRevCountFetch.Day || revCount == 0)
+                {
+                    var doc = CQ.CreateFromUrl("http://stackoverflow.com/review/close/stats");
+                    var statsTable = doc.Find("table.task-stat-table");
+                    var cells = statsTable.Find("td");
+                    var needReview = new string(cells.ElementAt(0).FirstElementChild.InnerText.Where(c => char.IsDigit(c)).ToArray());
+                    var reviews = 0;
+
+                    if (int.TryParse(needReview, out reviews))
+                    {
+                        revCount = reviews;
+                    }
+                    else
+                    {
+                        revCount = null;
+                    }
+
+                    lastRevCountFetch = DateTime.UtcNow;
+                }
+
+                return revCount;
+            }
+        }
+
+        internal static float LiveUserInstances { get; set; }
 
 
         /// <summary>
         /// The maximum number of reviews (per minutes) to be processed.
-        /// (Default: 100.)
+        /// (Default: 60.)
         /// </summary>
         public static float RequestThroughputMin
         {

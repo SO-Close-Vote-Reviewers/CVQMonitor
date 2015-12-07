@@ -23,7 +23,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,9 +30,16 @@ namespace SOCVRDotNet
 {
     public class User : IDisposable
     {
-        private readonly ManualResetEvent dataScraperMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent scraperThrottleMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent quiestScraperThrottleMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
         private EventManager evMan = new EventManager();
+        private Stack<int> revIDCache = new Stack<int>();
         private DateTime lastPing;
+        private bool resetScraper;
+        private bool resetQScraper;
+        private bool scraperResetDone = true;
+        private bool qScraperResetDone = true;
         private bool scraping;
         private bool dispose;
         private string fkey;
@@ -63,6 +69,8 @@ namespace SOCVRDotNet
 
                 Task.Run(() => ScrapeData());
             };
+
+            Task.Run(() => ResetDailyData());
         }
 
         ~User()
@@ -77,7 +85,7 @@ namespace SOCVRDotNet
             if (dispose) return;
             dispose = true;
 
-
+            scraperThrottleMre.Set();
 
             GC.SuppressFinalize(this);
         }
@@ -86,37 +94,135 @@ namespace SOCVRDotNet
 
         private void ResetDailyData()
         {
-            Reviews.Clear();
-            fkey = RequestThrottler.FkeyCached;
+            while (!dispose)
+            {
+                var wait = TimeSpan.FromHours(24 - DateTime.UtcNow.TimeOfDay.TotalHours);
+
+                dailyResetMre.WaitOne(wait);
+
+                resetScraper = true;
+                resetQScraper = true;
+                Reviews.Clear();
+                fkey = RequestThrottler.FkeyCached;
+
+                while (!scraperResetDone || !qScraperResetDone)
+                {
+                    // Yes yes, I know we shouldn't use Thread.Sleep(), yada yada yada.
+                    Thread.Sleep(1000);
+                }
+
+                resetScraper = false;
+                resetQScraper = false;
+            }
         }
 
         private void ScrapeData()
         {
-            var lastRev = lastPing;
-            var throttle = new Action(() =>
-            {
-                var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
-                var secsPerReq = Math.Max(60 / reqsPerMin, 5);
-                dataScraperMre.WaitOne(TimeSpan.FromSeconds(secsPerReq));
-            });
-
             RequestThrottler.LiveUserInstances++;
+            scraperResetDone = false;
+            var lastRev = lastPing;
+            var throttle = new Action(() => scraperThrottleMre.WaitOne(GetThrottlePeriod()));
+            var revLimit = -1;
 
-            while ((DateTime.UtcNow - lastRev).TotalMinutes < 5)
+            try
             {
-                throttle();
-                var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, 10).Where(id => Reviews.All(r => r.ID != id));
-                // Probably best to save the latest x review item IDs
-                // to save re-fetching the same items again for the next day.
+                revLimit = (RequestThrottler.ReviewsAvailableCached ?? 1000) >= 1000 ? 40 : 20;
 
-                // Filter out reviews that weren't from today.
-                // Fetch review items and parse accordingly (check tags/audits).
+                while ((DateTime.UtcNow - lastRev).TotalMinutes < 5 && !resetScraper && !dispose)
+                {
+                    var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, revLimit, throttle)
+                        .Where(id => Reviews.All(r => r.ID != id));
 
-                throttle();
-                CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                    foreach (var id in ids) ProcessReview(id, revLimit, throttle);
+
+                    throttle();
+                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+
+                    if (CompletedReviewsCount >= revLimit)
+                    {
+                        evMan.CallListeners(UserEventType.ReviewLimitReached, Reviews);
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                evMan.CallListeners(UserEventType.InternalException, ex);
             }
 
+            // If the user hasn't used all their reviews
+            // and if they're inactive and if we successfully
+            // managed to fetch the total reviews available count,
+            // fire off the quiet scraper (safeguard against missing
+            // any reviews (namely audits of deleted posts) which we
+            // may have missed).
+            if (revLimit != -1 && CompletedReviewsCount < revLimit && !resetScraper)
+            {
+                Task.Run(() => QuietScraper());
+            }
+
+            scraperResetDone = true;
+            scraping = false;
             RequestThrottler.LiveUserInstances--;
+        }
+
+        private void ProcessReview(int reviewID, int revLimit, Action throttle)
+        {
+            // ID cache control.
+            if (revIDCache.Contains(reviewID)) return;
+            revIDCache.Push(reviewID);
+            while (revIDCache.Count > revLimit) revIDCache.Pop();
+
+            throttle();
+            var rev = new ReviewItem(reviewID, fkey);
+
+            if (rev.Results.FirstOrDefault(r => r.UserID == ID)?.Timestamp.Day == DateTime.UtcNow.Day)
+            {
+                Reviews.Add(rev);
+
+                if (rev.AuditPassed != null)
+                {
+                    var evType = rev.AuditPassed == true ?
+                        UserEventType.AuditPassed :
+                        UserEventType.AuditFailed;
+
+                    evMan.CallListeners(evType, rev);
+                }
+
+                evMan.CallListeners(UserEventType.ItemReviewed, rev);
+            }
+        }
+
+        private void QuietScraper()
+        {
+            RequestThrottler.LiveUserInstances += 0.5F;
+            qScraperResetDone = false;
+
+            try
+            {
+                // No need to continue scraping if the main scraper is active.
+                while ((DateTime.UtcNow - lastPing).TotalMinutes > 5 && !resetQScraper && !dispose)
+                {
+                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+
+                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(2));
+                }
+            }
+            catch (Exception ex)
+            {
+                evMan.CallListeners(UserEventType.InternalException, ex);
+            }
+
+            qScraperResetDone = true;
+            RequestThrottler.LiveUserInstances -= 0.5F;
+        }
+
+        private TimeSpan GetThrottlePeriod(float multiplier = 1)
+        {
+            var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
+            var secsPerReq = Math.Max(60 / reqsPerMin, 5) * multiplier;
+
+            return TimeSpan.FromSeconds(secsPerReq);
         }
     }
 }
