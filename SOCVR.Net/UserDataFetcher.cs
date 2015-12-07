@@ -44,7 +44,7 @@ namespace SOCVRDotNet
         /// <param name="reviewCount">The number of reviews to fetch.</param>
         public static List<ReviewItem> FetchReviews(int userID, int reviewCount = 10)
         {
-            var fkey = GetFKey();
+            var fkey = GetFkey();
             var currentPageNo = 0;
             var reviews = new List<ReviewItem>();
 
@@ -77,7 +77,7 @@ namespace SOCVRDotNet
             return reviews;
         }
 
-        public static string GetFKey()
+        public static string GetFkey()
         {
             var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");
             var dom = CQ.Create(html);

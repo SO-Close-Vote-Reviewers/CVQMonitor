@@ -55,7 +55,7 @@ namespace SOCVRDotNet
         public UsersWatcher(IEnumerable<int> userIDs)
         {
             ReviewThroughput = 100;
-            fkey = UserDataFetcher.GetFKey();
+            fkey = UserDataFetcher.GetFkey();
             evMan = new EventManager();
             Users = new ConcurrentDictionary<int, User>();
 
@@ -131,7 +131,7 @@ namespace SOCVRDotNet
 
                     reviewsRefreshMre.WaitOne(waitTime);
 
-                    fkey = UserDataFetcher.GetFKey();
+                    fkey = UserDataFetcher.GetFkey();
                     var availableReviews = GetReviewsAvailable();
 
                     foreach (var id in Users.Keys)

@@ -106,7 +106,7 @@ namespace SOCVRDotNet
             {
                 try
                 {
-                    var fkey = UserDataFetcher.GetFKey();
+                    var fkey = UserDataFetcher.GetFkey();
                     var latestRevTime = DateTime.MaxValue;
                     var avg = 1D;
 

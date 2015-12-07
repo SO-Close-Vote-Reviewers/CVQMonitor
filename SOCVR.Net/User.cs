@@ -23,35 +23,46 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
     public class User : IDisposable
     {
-        private readonly Dictionary<string, DateTime> tagTimestamps = new Dictionary<string, DateTime>();
-        private List<string> prevTags;
-        private EventManager evMan;
-        private int reviewsSinceCurrentTags;
-        private string fkey;
+        private readonly ManualResetEvent dataScraperMre = new ManualResetEvent(false);
+        private EventManager evMan = new EventManager();
+        private DateTime lastPing;
+        private bool scraping;
         private bool dispose;
+        private string fkey;
+
+        public EventManager EventManager => evMan;
+
+        public HashSet<ReviewItem> Reviews { get; } = new HashSet<ReviewItem>();
+
+        public int CompletedReviewsCount { get; private set; }
 
         public int ID { get; private set; }
 
-        public UserReviewStatus ReviewStatus { get; private set; }
-
-        public EventManager EventManager { get { return evMan; } }
 
 
-
-        public User(string fkey, int userID)
+        public User(int userID)
         {
-            this.fkey = fkey;
-            evMan = new EventManager();
             ID = userID;
-            ReviewStatus = new UserReviewStatus(
-                userID,
-                () => EventManager.CallListeners(UserEventType.ReviewLimitReached),
-                ref evMan);
+            GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
+            GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
+            {
+                if (q != ReviewQueue.CloseVotes || id != ID || dispose) return;
+
+                lastPing = DateTime.UtcNow;
+
+                if (scraping) return;
+                scraping = true;
+
+                Task.Run(() => ScrapeData());
+            };
         }
 
         ~User()
@@ -63,154 +74,49 @@ namespace SOCVRDotNet
 
         public void Dispose()
         {
-            if (dispose) { return; }
+            if (dispose) return;
             dispose = true;
 
-            ReviewStatus.Dispose();
-            EventManager.Dispose();
+
 
             GC.SuppressFinalize(this);
         }
 
 
 
-        /// <summary>
-        /// Fetches the latest (unprocessed) reviews from a user's profile.
-        /// </summary>
-        /// <returns>The total number of reviews fetched and processed.</returns>
-        internal int ProcessReviews()
+        private void ResetDailyData()
         {
-            var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, ReviewStatus.QueuedReviews);
-
-            foreach (var id in ids)
-            {
-                var review = new ReviewItem(id, fkey);
-                ReviewStatus.Reviews.Add(review);
-
-                CheckTags(review);
-
-                EventManager.CallListeners(UserEventType.ItemReviewed, review);
-                ReviewStatus.QueuedReviews--;
-            }
-
-            return ids.Count;
+            Reviews.Clear();
+            fkey = RequestThrottler.FkeyCached;
         }
 
-        internal void ResetDailyData(string fkey, int availableReviews)
+        private void ScrapeData()
         {
-            this.fkey = fkey;
-
-            // Misc. review data
-            ReviewStatus.Reviews.Clear();
-            ReviewStatus.ReviewsCompletedCount = 0;
-            ReviewStatus.ReviewLimit = availableReviews > 1000 ? 40 : 20;
-
-            // Tag data.
-            prevTags = null;
-            reviewsSinceCurrentTags = 0;
-            tagTimestamps.Clear();
-            ReviewStatus.ReviewedTags.Clear();
-        }
-
-
-
-        private void CheckTags(ReviewItem review)
-        {
-            var timestamp = review.Results.First(rr => rr.UserID == ID).Timestamp;
-
-            foreach (var tag in review.Tags)
+            var lastRev = lastPing;
+            var throttle = new Action(() =>
             {
-                if (ReviewStatus.ReviewedTags.ContainsKey(tag))
-                {
-                    ReviewStatus.ReviewedTags[tag]++;
-                }
-                else
-                {
-                    ReviewStatus.ReviewedTags[tag] = 1;
-                }
+                var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
+                var secsPerReq = Math.Max(60 / reqsPerMin, 5);
+                dataScraperMre.WaitOne(TimeSpan.FromSeconds(secsPerReq));
+            });
 
-                tagTimestamps[tag] = timestamp;
+            RequestThrottler.LiveUserInstances++;
+
+            while ((DateTime.UtcNow - lastRev).TotalMinutes < 5)
+            {
+                throttle();
+                var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, 10).Where(id => Reviews.All(r => r.ID != id));
+                // Probably best to save the latest x review item IDs
+                // to save re-fetching the same items again for the next day.
+
+                // Filter out reviews that weren't from today.
+                // Fetch review items and parse accordingly (check tags/audits).
+
+                throttle();
+                CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
             }
 
-            if (prevTags != null && prevTags.Count != 0)
-            {
-                if (prevTags.Any(t => review.Tags.Contains(t)))
-                {
-                    reviewsSinceCurrentTags = 0;
-                }
-                else
-                {
-                    reviewsSinceCurrentTags++;
-                }
-            }
-
-            // NOT ENOUGH DATAZ.
-            if (ReviewStatus.Reviews.Count < 9) return;
-
-            var tagsSum = ReviewStatus.ReviewedTags.Sum(t => t.Value);
-            var highKvs = ReviewStatus.ReviewedTags.Where(t => t.Value >= tagsSum * (1F / 15)).ToDictionary(t => t.Key, t => t.Value);
-
-            // Not enough (accurate) data to continue analysis.
-            if (highKvs.Count == 0) { return; }
-
-            var maxTag = highKvs.Max(t => t.Value);
-            var topTags = highKvs.Where(t => t.Value >= ((maxTag / 3) * 2)).Select(t => t.Key).ToList();
-            var avgNoiseFloor = ReviewStatus.ReviewedTags.Where(t => !highKvs.ContainsKey(t.Key)).Average(t => t.Value);
-            prevTags = prevTags ?? topTags;
-
-            // They've started reviewing a different tag.
-            if (topTags.Count > 3 ||
-                reviewsSinceCurrentTags >= 3 ||
-                topTags.Any(t => !prevTags.Contains(t)))
-            {
-                HandleTagChange(ref topTags, avgNoiseFloor);
-            }
-        }
-
-        private void HandleTagChange(ref List<string> topTags, float avgNoiseFloor)
-        {
-            try
-            {
-                while (topTags.Count > 3)
-                {
-                    var oldestTag = new KeyValuePair<string, DateTime>(null, DateTime.MaxValue);
-                    foreach (var tag in topTags)
-                    {
-                        if (tagTimestamps[tag] < oldestTag.Value)
-                        {
-                            oldestTag = new KeyValuePair<string, DateTime>(tag, tagTimestamps[tag]);
-                        }
-                    }
-                    ReviewStatus.ReviewedTags[oldestTag.Key] = avgNoiseFloor;
-                    topTags.Remove(oldestTag.Key);
-                }
-
-                List<string> finishedTags;
-
-                if (reviewsSinceCurrentTags >= 3)
-                {
-                    finishedTags = prevTags;
-                }
-                else
-                {
-                    var tt = topTags;
-                    finishedTags = prevTags.Where(t => !tt.Contains(t)).ToList();
-                }
-
-                EventManager.CallListeners(UserEventType.CurrentTagsChanged, finishedTags);
-
-                foreach (var tag in finishedTags)
-                {
-                    ReviewStatus.ReviewedTags[tag] = avgNoiseFloor;
-                }
-
-                prevTags = null;
-                reviewsSinceCurrentTags = 0;
-            }
-            catch (Exception ex)
-            {
-                EventManager.CallListeners(UserEventType.InternalException, ex);
-            }
+            RequestThrottler.LiveUserInstances--;
         }
     }
 }
