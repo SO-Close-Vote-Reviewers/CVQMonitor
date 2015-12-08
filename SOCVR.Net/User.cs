@@ -143,7 +143,7 @@ namespace SOCVRDotNet
                     var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, revLimit, throttle)
                         .Where(id => Reviews.All(r => r.ID != id));
 
-                    foreach (var id in ids) ProcessReview(id, revLimit, throttle);
+                    foreach (var id in ids) ProcessReview(id, revLimit, throttle, ref lastRev);
 
                     throttle();
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
@@ -176,7 +176,7 @@ namespace SOCVRDotNet
             RequestThrottler.LiveUserInstances--;
         }
 
-        private void ProcessReview(int reviewID, int revLimit, Action throttle)
+        private void ProcessReview(int reviewID, int revLimit, Action throttle, ref DateTime lastReview)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
@@ -185,8 +185,9 @@ namespace SOCVRDotNet
 
             throttle();
             var rev = new ReviewItem(reviewID, fkey);
+            var revTime = rev.Results.First(r => r.UserID == ID).Timestamp;
 
-            if (rev.Results.FirstOrDefault(r => r.UserID == ID)?.Timestamp.Day == DateTime.UtcNow.Day)
+            if (revTime.Day == DateTime.UtcNow.Day)
             {
                 Reviews.Add(rev);
 
@@ -200,6 +201,8 @@ namespace SOCVRDotNet
                 }
 
                 evMan.CallListeners(EventType.ItemReviewed, rev);
+
+                lastReview = lastPing < revTime ? revTime : lastPing;
             }
         }
 
@@ -211,7 +214,7 @@ namespace SOCVRDotNet
             try
             {
                 // No need to continue scraping if the main scraper is active.
-                while ((DateTime.UtcNow - lastPing).TotalMinutes > 5 && !resetQScraper && !dispose)
+                while ((DateTime.UtcNow - lastPing).TotalMinutes >= 5 && !resetQScraper && !dispose)
                 {
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
@@ -230,7 +233,7 @@ namespace SOCVRDotNet
         private TimeSpan GetThrottlePeriod(float multiplier = 1)
         {
             var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
-            var secsPerReq = Math.Max(reqsPerMin * 60, 5) * multiplier;
+            var secsPerReq = Math.Max(reqsPerMin * 60, 3) * multiplier;
 
             return TimeSpan.FromSeconds(secsPerReq);
         }
