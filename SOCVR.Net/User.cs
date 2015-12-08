@@ -220,7 +220,7 @@ namespace SOCVRDotNet
         private TimeSpan GetThrottlePeriod(float multiplier = 1)
         {
             var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
-            var secsPerReq = Math.Max(60 / reqsPerMin, 5) * multiplier;
+            var secsPerReq = Math.Max(reqsPerMin * 60, 5) * multiplier;
 
             return TimeSpan.FromSeconds(secsPerReq);
         }
