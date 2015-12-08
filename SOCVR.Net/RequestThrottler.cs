@@ -28,7 +28,7 @@ namespace SOCVRDotNet
 {
     public static class RequestThrottler
     {
-        private static float reqTp = 60;
+        private static float reqTp = 30;
         private static string fkey;
         private static int? revCount = 0;
         private static DateTime lastFkeyFetch = DateTime.UtcNow;
@@ -81,7 +81,7 @@ namespace SOCVRDotNet
 
         /// <summary>
         /// The maximum number of reviews (per minutes) to be processed.
-        /// (Default: 60.)
+        /// (Default: 30.)
         /// </summary>
         public static float RequestThroughputMin
         {
@@ -91,7 +91,7 @@ namespace SOCVRDotNet
             }
             set
             {
-                if (reqTp < 0) throw new ArgumentOutOfRangeException("value", "Must be a positive number or 0.");
+                if (reqTp < 1) throw new ArgumentOutOfRangeException("value", "Must be a positive number.");
 
                 reqTp = value;
             }

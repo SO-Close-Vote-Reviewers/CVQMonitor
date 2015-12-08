@@ -147,7 +147,7 @@ namespace SOCVRDotNet
 
             if (!int.TryParse(new string(match.Value.Where(char.IsDigit).ToArray()), out reviewCount))
             {
-                evMan.CallListeners(UserEventType.InternalException, new Exception("Unable to parse ReviewCount string to int."));
+                evMan.CallListeners(EventType.InternalException, new Exception("Unable to parse ReviewCount string to int."));
             }
 
             return reviewCount;

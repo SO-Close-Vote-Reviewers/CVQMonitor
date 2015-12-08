@@ -32,13 +32,13 @@ namespace SOCVRDotNet
     {
         private bool disposed;
 
-        public ConcurrentDictionary<UserEventType, ConcurrentDictionary<int, Delegate>> ConnectedListeners { get; private set; }
+        public ConcurrentDictionary<EventType, ConcurrentDictionary<int, Delegate>> ConnectedListeners { get; private set; }
 
 
 
         public EventManager()
         {
-            ConnectedListeners = new ConcurrentDictionary<UserEventType, ConcurrentDictionary<int, Delegate>>();
+            ConnectedListeners = new ConcurrentDictionary<EventType, ConcurrentDictionary<int, Delegate>>();
         }
 
         ~EventManager()
@@ -48,7 +48,7 @@ namespace SOCVRDotNet
 
 
 
-        internal void CallListeners(UserEventType eventType, params object[] args)
+        internal void CallListeners(EventType eventType, params object[] args)
         {
             if (disposed) return; 
             if (!ConnectedListeners.ContainsKey(eventType)) return; 
@@ -64,9 +64,9 @@ namespace SOCVRDotNet
                     }
                     catch (Exception ex)
                     {
-                        if (eventType == UserEventType.InternalException) throw ex;
+                        if (eventType == EventType.InternalException) throw ex;
 
-                        CallListeners(UserEventType.InternalException, ex);
+                        CallListeners(EventType.InternalException, ex);
                     }
                 });
             }
@@ -84,7 +84,7 @@ namespace SOCVRDotNet
             GC.SuppressFinalize(this);
         }
 
-        public void ConnectListener(UserEventType eventType, Delegate listener)
+        public void ConnectListener(EventType eventType, Delegate listener)
         {
             if (disposed) return;
 
@@ -108,7 +108,7 @@ namespace SOCVRDotNet
             }
         }
 
-        public void DisconnectListener(UserEventType eventType, Delegate listener)
+        public void DisconnectListener(EventType eventType, Delegate listener)
         {
             if (disposed) return;
             if (!ConnectedListeners.ContainsKey(eventType)) throw new KeyNotFoundException();

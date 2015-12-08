@@ -42,6 +42,7 @@ namespace SOCVRDotNet
         private bool qScraperResetDone = true;
         private bool scraping;
         private bool dispose;
+        private bool started;
         private string fkey;
 
         public EventManager EventManager => evMan;
@@ -58,17 +59,24 @@ namespace SOCVRDotNet
         {
             ID = userID;
             fkey = RequestThrottler.FkeyCached;
-            GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
+            GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(EventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
             {
                 if (q != ReviewQueue.CloseVotes || id != ID || dispose) return;
 
                 lastPing = DateTime.UtcNow;
 
-                if (scraping) return;
-                scraping = true;
+                if (!started)
+                {
+                    started = true;
+                    evMan.CallListeners(EventType.ReviewingStarted);
+                }
 
-                Task.Run(() => ScrapeData());
+                if (!scraping)
+                {
+                    scraping = true;
+                    Task.Run(() => ScrapeData());
+                }
             };
 
             Task.Run(() => ResetDailyData());
@@ -101,6 +109,7 @@ namespace SOCVRDotNet
 
                 dailyResetMre.WaitOne(wait);
 
+                started = false;
                 resetScraper = true;
                 resetQScraper = true;
                 Reviews.Clear();
@@ -141,14 +150,14 @@ namespace SOCVRDotNet
 
                     if (CompletedReviewsCount >= revLimit)
                     {
-                        evMan.CallListeners(UserEventType.ReviewLimitReached, Reviews);
+                        evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
                         break;
                     }
                 }
             }
             catch (Exception ex)
             {
-                evMan.CallListeners(UserEventType.InternalException, ex);
+                evMan.CallListeners(EventType.InternalException, ex);
             }
 
             // If the user hasn't used all their reviews
@@ -184,19 +193,19 @@ namespace SOCVRDotNet
                 if (rev.AuditPassed != null)
                 {
                     var evType = rev.AuditPassed == true ?
-                        UserEventType.AuditPassed :
-                        UserEventType.AuditFailed;
+                        EventType.AuditPassed :
+                        EventType.AuditFailed;
 
                     evMan.CallListeners(evType, rev);
                 }
 
-                evMan.CallListeners(UserEventType.ItemReviewed, rev);
+                evMan.CallListeners(EventType.ItemReviewed, rev);
             }
         }
 
         private void QuietScraper()
         {
-            RequestThrottler.LiveUserInstances += 0.5F;
+            RequestThrottler.LiveUserInstances += 0.25F;
             qScraperResetDone = false;
 
             try
@@ -206,16 +215,16 @@ namespace SOCVRDotNet
                 {
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
-                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(2));
+                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(4));
                 }
             }
             catch (Exception ex)
             {
-                evMan.CallListeners(UserEventType.InternalException, ex);
+                evMan.CallListeners(EventType.InternalException, ex);
             }
 
             qScraperResetDone = true;
-            RequestThrottler.LiveUserInstances -= 0.5F;
+            RequestThrottler.LiveUserInstances -= 0.25F;
         }
 
         private TimeSpan GetThrottlePeriod(float multiplier = 1)
