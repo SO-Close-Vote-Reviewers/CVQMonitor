@@ -57,6 +57,7 @@ namespace SOCVRDotNet
         public User(int userID)
         {
             ID = userID;
+            fkey = RequestThrottler.FkeyCached;
             GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(UserEventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
             {
