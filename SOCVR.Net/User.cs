@@ -140,7 +140,11 @@ namespace SOCVRDotNet
 
                 while ((DateTime.UtcNow - lastRev).TotalMinutes < 5 && !resetScraper && !dispose)
                 {
-                    var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, revLimit, throttle)
+                    // No need to fetch all the reviews after filling the cache.
+                    // Also account for long throttle periods where we may miss
+                    // some reviews if we were to simply set a hard-coded value.
+                    var idsToFetch = (int)Math.Round(Math.Max(revLimit - revIDCache.Count, Math.Max(GetThrottlePeriod().TotalSeconds / 5, 5)));
+                    var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle)
                         .Where(id => Reviews.All(r => r.ID != id));
 
                     foreach (var id in ids) ProcessReview(id, revLimit, throttle, ref lastRev);
@@ -208,7 +212,7 @@ namespace SOCVRDotNet
 
         private void QuietScraper()
         {
-            RequestThrottler.LiveUserInstances += 0.25F;
+            RequestThrottler.LiveUserInstances += 0.2F;
             qScraperResetDone = false;
 
             try
@@ -218,7 +222,7 @@ namespace SOCVRDotNet
                 {
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
-                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(4));
+                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(5));
                 }
             }
             catch (Exception ex)
@@ -227,7 +231,7 @@ namespace SOCVRDotNet
             }
 
             qScraperResetDone = true;
-            RequestThrottler.LiveUserInstances -= 0.25F;
+            RequestThrottler.LiveUserInstances -= 0.2F;
         }
 
         private TimeSpan GetThrottlePeriod(float multiplier = 1)
