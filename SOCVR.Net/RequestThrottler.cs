@@ -28,7 +28,7 @@ namespace SOCVRDotNet
 {
     public static class RequestThrottler
     {
-        private static float reqTp = 30;
+        private static float reqTp = 50;
         private static string fkey;
         private static int? revCount = 0;
         private static DateTime lastFkeyFetch = DateTime.UtcNow;
@@ -81,7 +81,7 @@ namespace SOCVRDotNet
 
         /// <summary>
         /// The maximum number of reviews (per minutes) to be processed.
-        /// (Default: 30.)
+        /// (Default: 50.)
         /// </summary>
         public static float RequestThroughputMin
         {
