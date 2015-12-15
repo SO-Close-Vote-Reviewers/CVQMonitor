@@ -121,6 +121,11 @@ namespace SOCVRDotNet
                     Thread.Sleep(1000);
                 }
 
+                if (CompletedReviewsCount > 0 && CompletedReviewsCount < RequestThrottler.ReviewsAvailableCached)
+                {
+                    evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
+                }
+
                 resetScraper = false;
                 resetQScraper = false;
             }
