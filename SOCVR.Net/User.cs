@@ -112,7 +112,6 @@ namespace SOCVRDotNet
                 started = false;
                 resetScraper = true;
                 resetQScraper = true;
-                Reviews.Clear();
                 fkey = RequestThrottler.FkeyCached;
 
                 while (!scraperResetDone || !qScraperResetDone)
@@ -126,6 +125,7 @@ namespace SOCVRDotNet
                     evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
                 }
 
+                Reviews.Clear();
                 resetScraper = false;
                 resetQScraper = false;
             }
