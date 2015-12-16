@@ -122,7 +122,8 @@ namespace SOCVRDotNet
 
                 if (CompletedReviewsCount > 0 && CompletedReviewsCount < RequestThrottler.ReviewsAvailableCached)
                 {
-                    evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
+                    var revCopy = new HashSet<ReviewItem>(Reviews);
+                    evMan.CallListeners(EventType.ReviewingCompleted, revCopy);
                 }
 
                 Reviews.Clear();
