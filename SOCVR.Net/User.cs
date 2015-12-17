@@ -218,7 +218,7 @@ namespace SOCVRDotNet
 
         private void QuietScraper()
         {
-            RequestThrottler.LiveUserInstances += 0.2F;
+            RequestThrottler.LiveUserInstances += 0.125F;
             qScraperResetDone = false;
 
             try
@@ -228,7 +228,7 @@ namespace SOCVRDotNet
                 {
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
-                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(5));
+                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(8));
                 }
             }
             catch (Exception ex)
@@ -237,7 +237,7 @@ namespace SOCVRDotNet
             }
 
             qScraperResetDone = true;
-            RequestThrottler.LiveUserInstances -= 0.2F;
+            RequestThrottler.LiveUserInstances -= 0.125F;
         }
 
         private TimeSpan GetThrottlePeriod(float multiplier = 1)
