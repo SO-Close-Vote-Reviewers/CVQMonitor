@@ -96,5 +96,19 @@ namespace SOCVRDotNet
                 reqTp = value;
             }
         }
+        
+        public static float BackgroundScraperPollFactor
+        {
+            get
+            {
+                return bgScraperFactor;
+            }
+            set
+            {
+                if (value < 0 && value != 0) throw new ArgumentOutOfRangeException("value", "Must be a positive number (and not zero).");
+
+                bgScraperFactor = value;
+            }
+        }
     }
 }
