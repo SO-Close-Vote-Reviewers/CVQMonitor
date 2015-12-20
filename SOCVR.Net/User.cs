@@ -1,4 +1,4 @@
-﻿/*
+/*
  * SOCVR.Net. A .Net (4.5) library for fetching Stack Overflow user close vote review data.
  * Copyright © 2015, SO-Close-Vote-Reviewers.
  *
@@ -43,6 +43,7 @@ namespace SOCVRDotNet
         private bool scraping;
         private bool dispose;
         private bool started;
+        private bool finished;
         private string fkey;
 
         public EventManager EventManager => evMan;
@@ -120,7 +121,7 @@ namespace SOCVRDotNet
                     Thread.Sleep(1000);
                 }
 
-                if (CompletedReviewsCount > 0 && CompletedReviewsCount < RequestThrottler.ReviewsAvailableCached)
+                if (CompletedReviewsCount > 0 && !finished)
                 {
                     var revCopy = new HashSet<ReviewItem>(Reviews);
                     evMan.CallListeners(EventType.ReviewingCompleted, revCopy);
@@ -129,6 +130,7 @@ namespace SOCVRDotNet
                 Reviews.Clear();
                 resetScraper = false;
                 resetQScraper = false;
+                finished = false;
             }
         }
 
@@ -160,6 +162,7 @@ namespace SOCVRDotNet
 
                     if (CompletedReviewsCount >= revLimit)
                     {
+                        finished = true;
                         evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
                         break;
                     }
@@ -218,7 +221,9 @@ namespace SOCVRDotNet
 
         private void QuietScraper()
         {
-            RequestThrottler.LiveUserInstances += 0.125F;
+            var factor = RequestThrottler.BackgroundScraperPollFactor;
+
+            RequestThrottler.LiveUserInstances += 1 / factor;
             qScraperResetDone = false;
 
             try
@@ -228,7 +233,8 @@ namespace SOCVRDotNet
                 {
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
-                    quiestScraperThrottleMre.WaitOne(GetThrottlePeriod(8));
+                    var period = GetThrottlePeriod(Math.Pow(factor, 2));
+                    quiestScraperThrottleMre.WaitOne(period);
                 }
             }
             catch (Exception ex)
@@ -237,10 +243,10 @@ namespace SOCVRDotNet
             }
 
             qScraperResetDone = true;
-            RequestThrottler.LiveUserInstances -= 0.125F;
+            RequestThrottler.LiveUserInstances -= 1 / factor;
         }
 
-        private TimeSpan GetThrottlePeriod(float multiplier = 1)
+        private TimeSpan GetThrottlePeriod(double multiplier = 1)
         {
             var reqsPerMin = RequestThrottler.LiveUserInstances / RequestThrottler.RequestThroughputMin;
             var secsPerReq = Math.Max(reqsPerMin * 60, 5) * multiplier;
