@@ -28,6 +28,7 @@ namespace SOCVRDotNet
 {
     public static class RequestThrottler
     {
+        private static float bgScraperFactor = 8;
         private static float reqTp = 50;
         private static string fkey;
         private static int? revCount = 0;
