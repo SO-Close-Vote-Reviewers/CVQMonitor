@@ -9,7 +9,7 @@ assembly_info:
   file: SOCVR.Net\Properties\AssemblyInfo.cs
   assembly_version: '3.0.0.0'
   assembly_file_version: '{version}'
-  assembly_informational_version: '3.0.0-rc11'
+  assembly_informational_version: '3.0.0-rc12'
 
 before_build:
 - nuget restore
