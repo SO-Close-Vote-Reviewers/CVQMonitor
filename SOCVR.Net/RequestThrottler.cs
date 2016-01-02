@@ -21,8 +21,6 @@
 
 
 using System;
-using System.Linq;
-using CsQuery;
 
 namespace SOCVRDotNet
 {
@@ -30,52 +28,6 @@ namespace SOCVRDotNet
     {
         private static float bgScraperFactor = 8;
         private static float reqTp = 50;
-        private static string fkey;
-        private static int? revCount = 0;
-        private static DateTime lastFkeyFetch = DateTime.UtcNow;
-        private static DateTime lastRevCountFetch = DateTime.UtcNow;
-
-        internal static string FkeyCached
-        {
-            get
-            {
-                if (DateTime.UtcNow.Day != lastFkeyFetch.Day || fkey == null)
-                {
-                    fkey = UserDataFetcher.GetFkey();
-                    lastFkeyFetch = DateTime.UtcNow;
-                }
-
-                return fkey;
-            }
-        }
-
-        internal static int? ReviewsAvailableCached
-        {
-            get
-            {
-                if (DateTime.UtcNow.Day != lastRevCountFetch.Day || revCount == 0)
-                {
-                    var doc = CQ.CreateFromUrl("http://stackoverflow.com/review/close/stats");
-                    var statsTable = doc.Find("table.task-stat-table");
-                    var cells = statsTable.Find("td");
-                    var needReview = new string(cells.ElementAt(0).FirstElementChild.InnerText.Where(c => char.IsDigit(c)).ToArray());
-                    var reviews = 0;
-
-                    if (int.TryParse(needReview, out reviews))
-                    {
-                        revCount = reviews;
-                    }
-                    else
-                    {
-                        revCount = null;
-                    }
-
-                    lastRevCountFetch = DateTime.UtcNow;
-                }
-
-                return revCount;
-            }
-        }
 
         internal static float LiveUserInstances { get; set; }
 
@@ -97,7 +49,10 @@ namespace SOCVRDotNet
                 reqTp = value;
             }
         }
-        
+
+        /// <summary>
+        /// Default 8.
+        /// </summary>
         public static float BackgroundScraperPollFactor
         {
             get

@@ -51,12 +51,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="EventManager.cs" />
+    <Compile Include="GlobalCacher.cs" />
     <Compile Include="GlobalDashboardWatcher.cs" />
     <Compile Include="RequestThrottler.cs" />
     <Compile Include="ReviewAction.cs" />
     <Compile Include="ReviewItem.cs" />
     <Compile Include="ReviewResult.cs" />
     <Compile Include="ReviewQueue.cs" />
+    <Compile Include="ScraperStatus.cs" />
     <Compile Include="UserDataFetcher.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="UserEventType.cs" />

@@ -23,6 +23,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,19 +32,14 @@ namespace SOCVRDotNet
     public class User : IDisposable
     {
         private readonly ManualResetEvent scraperThrottleMre = new ManualResetEvent(false);
-        private readonly ManualResetEvent quiestScraperThrottleMre = new ManualResetEvent(false);
+        private readonly ManualResetEvent quietScraperThrottleMre = new ManualResetEvent(false);
         private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
         private EventManager evMan = new EventManager();
         private Stack<int> revIDCache = new Stack<int>();
         private DateTime lastPing;
-        private bool resetScraper;
-        private bool resetQScraper;
-        private bool scraperResetDone = true;
-        private bool qScraperResetDone = true;
-        private bool scraping;
+        private ScraperStatus s1, s2;
         private bool dispose;
-        private bool started;
-        private bool finished;
+        private bool isMod;
         private string fkey;
 
         public EventManager EventManager => evMan;
@@ -58,8 +54,9 @@ namespace SOCVRDotNet
 
         public User(int userID)
         {
+            isMod = IsModerator(userID);
             ID = userID;
-            fkey = RequestThrottler.FkeyCached;
+            fkey = GlobalCacher.FkeyCached;
             GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(EventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
             {
@@ -67,15 +64,13 @@ namespace SOCVRDotNet
 
                 lastPing = DateTime.UtcNow;
 
-                if (!started)
+                if (s1 == ScraperStatus.Inactive && s2 == ScraperStatus.Inactive)
                 {
-                    started = true;
                     evMan.CallListeners(EventType.ReviewingStarted);
                 }
 
-                if (!scraping)
+                if (s1 == ScraperStatus.Inactive)
                 {
-                    scraping = true;
                     Task.Run(() => ScrapeData());
                 }
             };
@@ -95,9 +90,32 @@ namespace SOCVRDotNet
             if (dispose) return;
             dispose = true;
 
-            scraperThrottleMre.Set();
+            s1 = ScraperStatus.ShutdownRequested;
+            s2 = ScraperStatus.ShutdownRequested;
+            scraperThrottleMre?.Set();
+            quietScraperThrottleMre?.Set();
+            dailyResetMre?.Set();
+            scraperThrottleMre?.Dispose();
+            quietScraperThrottleMre?.Dispose();
+            dailyResetMre?.Dispose();
+            evMan?.Dispose();
 
             GC.SuppressFinalize(this);
+        }
+
+        public static bool IsModerator(int userID)
+        {
+            try
+            {
+                return new WebClient()
+                    .DownloadString($"http://stackoverflow.com/users/{userID}")
+                    .Contains("<span class=\"mod-flair\" title=\"moderator\">");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                return false;
+            }
         }
 
 
@@ -110,60 +128,50 @@ namespace SOCVRDotNet
 
                 dailyResetMre.WaitOne(wait);
 
-                started = false;
-                resetScraper = true;
-                resetQScraper = true;
-                fkey = RequestThrottler.FkeyCached;
+                s1 = ScraperStatus.ShutdownRequested;
+                s2 = ScraperStatus.ShutdownRequested;
+                fkey = GlobalCacher.FkeyCached;
 
-                while (!scraperResetDone || !qScraperResetDone)
+                while (s1 != ScraperStatus.Inactive || s2 != ScraperStatus.Inactive)
                 {
                     // Yes yes, I know we shouldn't use Thread.Sleep(), yada yada yada.
                     Thread.Sleep(1000);
                 }
 
-                if (CompletedReviewsCount > 0 && !finished)
-                {
-                    var revCopy = new HashSet<ReviewItem>(Reviews);
-                    evMan.CallListeners(EventType.ReviewingCompleted, revCopy);
-                }
-
                 Reviews.Clear();
-                resetScraper = false;
-                resetQScraper = false;
-                finished = false;
             }
         }
 
         private void ScrapeData()
         {
+            s1 = ScraperStatus.Active;
             RequestThrottler.LiveUserInstances++;
-            scraperResetDone = false;
+
             var lastRev = lastPing;
             var throttle = new Action(() => scraperThrottleMre.WaitOne(GetThrottlePeriod()));
-            var revLimit = -1;
 
             try
             {
-                revLimit = (RequestThrottler.ReviewsAvailableCached ?? 1000) >= 1000 ? 40 : 20;
-
-                while ((DateTime.UtcNow - lastRev).TotalMinutes < 5 && !resetScraper && !dispose)
+                while ((DateTime.UtcNow - lastRev).TotalMinutes < 5 && s1 == ScraperStatus.Active)
                 {
                     // No need to fetch all the reviews after filling the cache.
                     // Also account for long throttle periods where we may miss
                     // some reviews if we were to simply set a hard-coded value.
-                    var idsToFetch = (int)Math.Round(Math.Max(revLimit - revIDCache.Count, Math.Max(GetThrottlePeriod().TotalSeconds / 5, 5)));
+                    var idsToFetch = (int)Math.Round(Math.Min(GlobalCacher.ReviewLimitCached(isMod) - revIDCache.Count, Math.Max(GetThrottlePeriod().TotalSeconds / 5, 5)));
                     var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle)
                         .Where(id => Reviews.All(r => r.ID != id));
 
-                    foreach (var id in ids) ProcessReview(id, revLimit, throttle, ref lastRev);
+                    foreach (var id in ids)
+                    {
+                        ProcessReview(id, GlobalCacher.ReviewLimitCached(), throttle, ref lastRev);
+                    }
 
                     throttle();
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
-                    if (CompletedReviewsCount >= revLimit)
+                    if (CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
                     {
-                        finished = true;
-                        evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
+                        LimitReached();
                         break;
                     }
                 }
@@ -179,14 +187,17 @@ namespace SOCVRDotNet
             // fire off the quiet scraper (safeguard against missing
             // any reviews (namely audits of deleted posts) which we
             // may have missed).
-            if (revLimit != -1 && CompletedReviewsCount < revLimit && !resetScraper)
+            // If the user is a mod, don't bother checking up on them,
+            // we only fire off this scraper to trigger the ReviewingCompleted
+            // event (which is not applicable for mods).
+            if (CompletedReviewsCount < GlobalCacher.ReviewLimitCached() && 
+                s1 == ScraperStatus.Active && !isMod)
             {
                 Task.Run(() => QuietScraper());
             }
 
-            scraperResetDone = true;
-            scraping = false;
             RequestThrottler.LiveUserInstances--;
+            s1 = ScraperStatus.Inactive;
         }
 
         private void ProcessReview(int reviewID, int revLimit, Action throttle, ref DateTime lastReview)
@@ -221,20 +232,25 @@ namespace SOCVRDotNet
 
         private void QuietScraper()
         {
+            s2 = ScraperStatus.Active;
             var factor = RequestThrottler.BackgroundScraperPollFactor;
-
             RequestThrottler.LiveUserInstances += 1 / factor;
-            qScraperResetDone = false;
 
             try
             {
                 // No need to continue scraping if the main scraper is active.
-                while ((DateTime.UtcNow - lastPing).TotalMinutes >= 5 && !resetQScraper && !dispose)
+                while ((DateTime.UtcNow - lastPing).TotalMinutes >= 5 && s2 == ScraperStatus.Active)
                 {
                     CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
+                    if (CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
+                    {
+                        LimitReached();
+                        break;
+                    }
+
                     var period = GetThrottlePeriod(Math.Pow(factor, 2));
-                    quiestScraperThrottleMre.WaitOne(period);
+                    quietScraperThrottleMre.WaitOne(period);
                 }
             }
             catch (Exception ex)
@@ -242,8 +258,14 @@ namespace SOCVRDotNet
                 evMan.CallListeners(EventType.InternalException, ex);
             }
 
-            qScraperResetDone = true;
             RequestThrottler.LiveUserInstances -= 1 / factor;
+            s2 = ScraperStatus.Inactive;
+        }
+
+        private void LimitReached()
+        {
+            var revCpy = new HashSet<ReviewItem>(Reviews);
+            evMan.CallListeners(EventType.ReviewingCompleted, revCpy);
         }
 
         private TimeSpan GetThrottlePeriod(double multiplier = 1)
