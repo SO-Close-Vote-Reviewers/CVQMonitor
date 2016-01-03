@@ -58,6 +58,20 @@ namespace SOCVRDotNet
             }
         }
 
+        public TimeSpan ReviewSessionDuration
+        {
+            get
+            {
+                if ((Reviews?.Count ?? 0) > 1)
+                {
+                    var revRes = Reviews.Select(r => r.Results.First(rr => rr.UserID == ID));
+                    return revRes.Max(r => r.Timestamp) - revRes.Min(r => r.Timestamp);
+                }
+
+                return TimeSpan.MinValue;
+            }
+        }
+
         public EventManager EventManager => evMan;
 
         public HashSet<ReviewItem> Reviews { get; } = new HashSet<ReviewItem>();
