@@ -42,6 +42,22 @@ namespace SOCVRDotNet
         private bool isMod;
         private string fkey;
 
+        public TimeSpan AvgDurationPerReview
+        {
+            get
+            {
+                if ((Reviews?.Count ?? 0) > 1)
+                {
+                    var revRes = Reviews.Select(r => r.Results.First(rr => rr.UserID == ID));
+                    var revDur = revRes.Max(r => r.Timestamp) - revRes.Min(r => r.Timestamp);
+
+                    return new TimeSpan(revDur.Ticks / (CompletedReviewsCount - 1));
+                }
+
+                return TimeSpan.MinValue;
+            }
+        }
+
         public EventManager EventManager => evMan;
 
         public HashSet<ReviewItem> Reviews { get; } = new HashSet<ReviewItem>();
@@ -128,8 +144,14 @@ namespace SOCVRDotNet
 
                 dailyResetMre.WaitOne(wait);
 
-                s1 = ScraperStatus.ShutdownRequested;
-                s2 = ScraperStatus.ShutdownRequested;
+                if (s1 != ScraperStatus.Inactive)
+                {
+                    s1 = ScraperStatus.ShutdownRequested;
+                }
+                if (s2 != ScraperStatus.Inactive)
+                {
+                    s2 = ScraperStatus.ShutdownRequested;
+                }
                 fkey = GlobalCacher.FkeyCached;
 
                 while (s1 != ScraperStatus.Inactive || s2 != ScraperStatus.Inactive)
