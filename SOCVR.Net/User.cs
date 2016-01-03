@@ -193,7 +193,11 @@ namespace SOCVRDotNet
                     // No need to fetch all the reviews after filling the cache.
                     // Also account for long throttle periods where we may miss
                     // some reviews if we were to simply set a hard-coded value.
-                    var idsToFetch = (int)Math.Round(Math.Min(GlobalCacher.ReviewLimitCached(isMod) - revIDCache.Count, Math.Max(GetThrottlePeriod().TotalSeconds / 5, 5)));
+                    var idsToFetch = (int)Math.Round(Math.Max(GetThrottlePeriod().TotalSeconds / 5, 5));
+                    if (!isMod)
+                    {
+                        idsToFetch = Math.Max(GlobalCacher.ReviewLimitCached() - revIDCache.Count, idsToFetch);
+                    }
                     var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle)
                         .Where(id => Reviews.All(r => r.ID != id));
 
