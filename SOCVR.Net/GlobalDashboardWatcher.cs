@@ -81,6 +81,8 @@ namespace SOCVRDotNet
 
         private static void HandleException(Exception ex)
         {
+            InitialiseWS();
+
             if (OnException == null) throw ex;
 
             OnException(ex);
@@ -88,7 +90,7 @@ namespace SOCVRDotNet
 
         private static void HandleClose(CloseEventArgs e)
         {
-            if (e.WasClean || e.Code == (ushort)CloseStatusCode.Normal || cleanUp) return;
+            if (cleanUp) return;
 
             InitialiseWS();
         }

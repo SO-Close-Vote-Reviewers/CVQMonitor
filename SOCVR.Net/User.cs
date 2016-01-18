@@ -193,7 +193,8 @@ namespace SOCVRDotNet
                     // No need to fetch all the reviews after filling the cache.
                     // Also account for long throttle periods where we may miss
                     // some reviews if we were to simply set a hard-coded value.
-                    var idsToFetch = (int)Math.Round(Math.Max(GetThrottlePeriod().TotalSeconds / 5, 5));
+                    // (Assuming a user wouldn't review faster than 5 secs per review.)
+                    var idsToFetch = (int)Math.Round(Math.Max(GetThrottlePeriod().TotalSeconds / 5, 3));
                     if (!isMod)
                     {
                         idsToFetch = Math.Max(GlobalCacher.ReviewLimitCached() - revIDCache.Count, idsToFetch);
@@ -203,7 +204,7 @@ namespace SOCVRDotNet
 
                     foreach (var id in ids)
                     {
-                        ProcessReview(id, GlobalCacher.ReviewLimitCached(), throttle, ref lastRev);
+                        ProcessReview(id, throttle, ref lastRev);
                     }
 
                     throttle();
@@ -230,7 +231,7 @@ namespace SOCVRDotNet
             // If the user is a mod, don't bother checking up on them,
             // we only fire off this scraper to trigger the ReviewingCompleted
             // event (which is not applicable for mods).
-            if (CompletedReviewsCount < GlobalCacher.ReviewLimitCached() && 
+            if (CompletedReviewsCount < GlobalCacher.ReviewLimitCached() &&
                 s1 == ScraperStatus.Active && !isMod)
             {
                 Task.Run(() => QuietScraper());
@@ -240,12 +241,12 @@ namespace SOCVRDotNet
             s1 = ScraperStatus.Inactive;
         }
 
-        private void ProcessReview(int reviewID, int revLimit, Action throttle, ref DateTime lastReview)
+        private void ProcessReview(int reviewID, Action throttle, ref DateTime lastReview)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
             revIDCache.Push(reviewID);
-            while (revIDCache.Count > revLimit) revIDCache.Pop();
+            while (revIDCache.Count > GlobalCacher.ReviewLimitCached()) revIDCache.Pop();
 
             throttle();
             var rev = new ReviewItem(reviewID, fkey);
