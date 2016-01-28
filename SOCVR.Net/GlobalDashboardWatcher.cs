@@ -24,13 +24,17 @@ using System;
 using System.Collections.Generic;
 using WebSocketSharp;
 using ServiceStack.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
     internal static class GlobalDashboardWatcher
     {
+        private static ManualResetEvent socketResetMre = new ManualResetEvent(false);
         private static bool cleanUp;
         private static WebSocket ws;
+        private static DateTime lastMsg = DateTime.MaxValue;
 
         public delegate void OnExceptionEventHandler(Exception ex);
         public delegate void UserEnteredQueueEventHandler(ReviewQueue queue, int userID);
@@ -44,6 +48,7 @@ namespace SOCVRDotNet
             AppDomain.CurrentDomain.ProcessExit += (o, oo) => CleanUp();
 
             InitialiseWS();
+            Task.Run(() => RestartWS());
         }
 
 
@@ -57,16 +62,26 @@ namespace SOCVRDotNet
             ws.OnError += (o, oo) => HandleException(oo.Exception);
             ws.OnClose += (o, oo) => HandleClose(oo);
             ws.Connect();
+
+            Console.WriteLine($"INFO| Master websocket started\nStack trace:\n{Environment.StackTrace}");
         }
 
         private static void HandleMessage(string message)
         {
             if (string.IsNullOrEmpty(message)) return;
 
+            lastMsg = DateTime.UtcNow;
+
             try
             {
                 var obj = JsonSerializer.DeserializeFromString<Dictionary<string, object>[]>(message);
+
+                if (obj.Length == 0 || !obj[0].ContainsKey("data")) return;
+
                 var data = JsonSerializer.DeserializeFromString<Dictionary<string, object>>(obj[0]["data"].ToString());
+
+                if (!data.ContainsKey("i") || !data.ContainsKey("u")) return;
+
                 var queue = (ReviewQueue)int.Parse(data["i"].ToString());
                 var userID = int.Parse(data["u"].ToString());
 
@@ -75,29 +90,50 @@ namespace SOCVRDotNet
                     UserEnteredQueue(queue, userID);
                 }
             }
-            // Ignore exceptions from parsing malformed messages.
-            catch (Exception) { }
+            // Ignore exceptions from parsing unrecognised messages.
+            catch { }
         }
 
         private static void HandleException(Exception ex)
         {
             InitialiseWS();
 
-            if (OnException == null) throw ex;
-
-            OnException(ex);
+            if (OnException == null)
+            {
+                Console.WriteLine(ex);
+            }
+            else
+            {
+                OnException(ex);
+            }
         }
 
         private static void HandleClose(CloseEventArgs e)
         {
-            if (cleanUp) return;
+            Console.WriteLine($"INFO| Master websocket closed (clean up: {cleanUp})\nStack trace:\n{Environment.StackTrace}");
 
+            if (cleanUp) return;
             InitialiseWS();
+        }
+
+        private static void RestartWS()
+        {
+            while (!cleanUp)
+            {
+                socketResetMre.WaitOne(TimeSpan.FromSeconds(15));
+
+                if ((DateTime.UtcNow - lastMsg).TotalMinutes > 5)
+                {
+                    InitialiseWS();
+                    Console.WriteLine("INFO| Master websocket restarted (missed HB)");
+                }
+            }
         }
 
         private static void CleanUp()
         {
             cleanUp = true;
+            socketResetMre.Set();
             ws.Close();
         }
     }
