@@ -110,8 +110,6 @@ namespace SOCVRDotNet
 
         private static void HandleClose(CloseEventArgs e)
         {
-            Console.WriteLine($"INFO| Master websocket closed (clean up: {cleanUp})\nStack trace:\n{Environment.StackTrace}");
-
             if (cleanUp) return;
             InitialiseWS();
         }
@@ -125,7 +123,6 @@ namespace SOCVRDotNet
                 if ((DateTime.UtcNow - lastMsg).TotalMinutes > 5)
                 {
                     InitialiseWS();
-                    Console.WriteLine("INFO| Master websocket restarted (missed HB)");
                 }
             }
         }

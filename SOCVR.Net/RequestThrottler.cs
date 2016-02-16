@@ -21,20 +21,22 @@
 
 
 using System;
+using System.Collections.Concurrent;
 
 namespace SOCVRDotNet
 {
     public static class RequestThrottler
     {
         private static float bgScraperFactor = 8;
-        private static float reqTp = 50;
+        private static float reqTp = 30;
 
-        internal static float LiveUserInstances { get; set; }
+        internal static ConcurrentDictionary<int, ushort> ReviewsPending { get; set; } = new ConcurrentDictionary<int, ushort>();
+
 
 
         /// <summary>
         /// The maximum number of reviews (per minutes) to be processed.
-        /// (Default: 50.)
+        /// (Default: 30.)
         /// </summary>
         public static float RequestThroughputMin
         {
