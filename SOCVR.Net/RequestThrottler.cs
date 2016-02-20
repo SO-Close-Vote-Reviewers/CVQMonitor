@@ -32,6 +32,8 @@ namespace SOCVRDotNet
 
         internal static ConcurrentDictionary<int, ushort> ReviewsPending { get; set; } = new ConcurrentDictionary<int, ushort>();
 
+        internal static ConcurretQueue<DateTime> ProcessedReviews { get; set; } = new ConcurrentQueue<DateTime>();
+
 
 
         /// <summary>
