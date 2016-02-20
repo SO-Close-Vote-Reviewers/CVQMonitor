@@ -37,8 +37,11 @@ namespace SOCVRDotNet
         private readonly ManualResetEvent cvrCountUpdaterMre = new ManualResetEvent(false);
         private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
         private EventManager evMan = new EventManager();
-        private Stack<int> revIDCache = new Stack<int>();
+        private readonly Queue<int> revIDCache = new Queue<int>();
         private ScraperStatus ss;
+        private DateTime initialised;
+        private int completedReviewsCount;
+        private bool isReviewing;
         private bool dispose;
         private bool isMod;
         private string fkey;
@@ -79,7 +82,7 @@ namespace SOCVRDotNet
 
         public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
 
-        public int CompletedReviewsCount { get; private set; }
+        public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, completedReviewsCount); } }
 
         public int ID { get; private set; }
 
@@ -101,13 +104,23 @@ namespace SOCVRDotNet
             {
                 if (q != ReviewQueue.CloseVotes || id != ID || dispose) return;
 
-                RequestThrottler.ReviewsPending[ID]++;
-
-                if (ss == ScraperStatus.Inactive)
+                if (RequestThrottler.ReviewsPending[ID] != -1)
                 {
+                    RequestThrottler.ReviewsPending[ID]++;
+                }
+                else 
+                {
+                    RequestThrottler.ReviewsPending[ID] = 1;
+                }
+                
+                if (!isReviewing)
+                {
+                    isReviewing = true;
                     evMan.CallListeners(EventType.ReviewingStarted);
                 }
             };
+
+            RequestThrottler.ReviewsPending[ID] = -1;
 
             // So many tasks, such little time.
             Task.Run(() => ResetDailyData());
@@ -184,6 +197,7 @@ namespace SOCVRDotNet
                 }
 
                 Reviews.Clear();
+                isReviewing = false;
             }
         }
 
@@ -195,8 +209,6 @@ namespace SOCVRDotNet
 
             while (ss == ScraperStatus.Active)
             {
-                var ws = Stopwatch.StartNew();
-
                 scraperThrottleMre.WaitOne(TimeSpan.FromMilliseconds(200));
 
                 if (RequestThrottler.ReviewsPending[ID] == 0) continue;
@@ -213,8 +225,7 @@ namespace SOCVRDotNet
                         RequestThrottler.ReviewsPending[ID]--;
                     }
 
-                    ws.Stop();
-                    var avg = ((ws.ElapsedMilliseconds / idsToFetch) / 2) + (DetectionLatency.Milliseconds / 2);
+                    var avg = ((DateTime.UtcNow - Reviews.Last().Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
                     DetectionLatency = TimeSpan.FromMilliseconds(avg);
                 }
                 catch (Exception ex)
@@ -241,16 +252,17 @@ namespace SOCVRDotNet
             foreach (var id in ids)
             {
                 ProcessReview(id, throttle);
-                throttle();
             }
+            
+            initialised = DateTime.UtcNow;
         }
 
-        private void ProcessReview(int reviewID, Action throttle)
+        private void ProcessReview(int reviewID, Action throttle, bool raiseEvents = true)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
-            revIDCache.Push(reviewID);
-            while (revIDCache.Count > GlobalCacher.ReviewLimitCached()) revIDCache.Pop();
+            revIDCache.Enqueue(reviewID);
+            while (revIDCache.Count > GlobalCacher.ReviewLimitCached()) revIDCache.Dequeue();
 
             throttle();
             var rev = new ReviewItem(reviewID, fkey);
@@ -259,17 +271,21 @@ namespace SOCVRDotNet
             if (revTime.Day == DateTime.UtcNow.Day)
             {
                 Reviews.Add(rev);
+                RequestThrottler.ProcessedReviews.Enqueue(DateTime.UtcNow);
 
-                if (rev.AuditPassed != null)
+                if (raiseEvents)
                 {
-                    var evType = rev.AuditPassed == true ?
-                        EventType.AuditPassed :
-                        EventType.AuditFailed;
+                    if (rev.AuditPassed != null)
+                    {
+                        var evType = rev.AuditPassed == true ?
+                            EventType.AuditPassed :
+                            EventType.AuditFailed;
 
-                    evMan.CallListeners(evType, rev);
+                        evMan.CallListeners(evType, rev);
+                    }
+
+                    evMan.CallListeners(EventType.ItemReviewed, rev);
                 }
-
-                evMan.CallListeners(EventType.ItemReviewed, rev);
             }
         }
 
@@ -279,6 +295,20 @@ namespace SOCVRDotNet
 
             while (!dispose)
             {
+                Thread.Sleep(250);
+                
+                if ((DateTime.UtcNow - initialised).TotalMinutes < 1)
+                {
+                    if (CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
+                    {
+                        limitHit = DateTime.UtcNow.Date;
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+                
                 if (limitHit.Date != DateTime.UtcNow.Date &&
                     CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
                 {
@@ -286,9 +316,6 @@ namespace SOCVRDotNet
                     var revCpy = new HashSet<ReviewItem>(Reviews);
                     evMan.CallListeners(EventType.ReviewingCompleted, revCpy);
                 }
-
-                // Gasp, Thread.Sleep. Whatever...
-                Thread.Sleep(100);
             }
         }
 
@@ -298,8 +325,12 @@ namespace SOCVRDotNet
             {
                 try
                 {
-                    cvrCountUpdaterMre.WaitOne(GetThrottlePeriod(RequestThrottler.BackgroundScraperPollFactor));
-                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                    cvrCountUpdaterMre.WaitOne(GetThrottlePeriod(true));
+                    
+                    if (isReviewing)
+                    {
+                        completedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -308,10 +339,27 @@ namespace SOCVRDotNet
             }
         }
 
-        private TimeSpan GetThrottlePeriod(float multiplier = 1)
+        private TimeSpan GetThrottlePeriod(bool isBgScraper = false)
         {
-            var reqsPerMin = RequestThrottler.ReviewsPending.Values.Sum(x => x == 0 ? 1F / RequestThrottler.BackgroundScraperPollFactor : x) / RequestThrottler.RequestThroughputMin;
-            var secsPerReq = Math.Max(reqsPerMin * 60, 1) * multiplier;
+            while (true)
+            {
+                DateTime temp;
+                RequestThrottler.ProcessedReviews.TryPeek(out temp);
+                if ((DateTime.UtcNow - temp).TotalMinutes > 1)
+                {
+                    RequestThrottler.ProcessedReviews.TryDequeue(out temp);
+                }
+                else
+                {
+                    break;
+                }
+            }
+            float totalReqs = RequestThrottler.ProcessedReviews.Count;
+            totalReqs += RequestThrottler.ReviewsPending.Values.Sum(x => x > -1 ? 1 / RequestThrottler.BackgroundScraperPollFactor : 0);
+            
+            var delayMin = totalReqs / RequestThrottler.RequestThroughputMin;
+            var secsPerReq = delayMin * 60;
+            secsPerReq = isBgScraper ? secsPerReq * RequestThrottler.BackgroundScraperPollFactor : secsPerReq;
 
             return TimeSpan.FromSeconds(secsPerReq);
         }
