@@ -325,7 +325,7 @@ namespace SOCVRDotNet
             {
                 try
                 {
-                    cvrCountUpdaterMre.WaitOne(GetThrottlePeriod(RequestThrottler.BackgroundScraperPollFactor));
+                    cvrCountUpdaterMre.WaitOne(GetThrottlePeriod(true));
                     
                     if (isReviewing)
                     {
@@ -339,9 +339,9 @@ namespace SOCVRDotNet
             }
         }
 
-        private TimeSpan GetThrottlePeriod(bool isBgScraper)
+        private TimeSpan GetThrottlePeriod(bool isBgScraper = false)
         {
-            while (((DateTime.UtcNow - RequestThrottler.ReviewsProcessed.TryPeek()).TotalMinutes > 1)
+            while ((DateTime.UtcNow - RequestThrottler.ReviewsProcessed.TryPeek()).TotalMinutes > 1)
             {
                 DateTime temp;
                 RequestThrottler.ReviewsProcessed.TryDequeue(out temp);
