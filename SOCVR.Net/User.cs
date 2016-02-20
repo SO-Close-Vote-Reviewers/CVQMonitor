@@ -341,10 +341,18 @@ namespace SOCVRDotNet
 
         private TimeSpan GetThrottlePeriod(bool isBgScraper = false)
         {
-            while ((DateTime.UtcNow - RequestThrottler.ProcessedReviews.TryPeek()).TotalMinutes > 1)
+            while (true)
             {
                 DateTime temp;
-                RequestThrottler.ProcessedReviews.TryDequeue(out temp);
+                RequestThrottler.ProcessedReviews.TryPeek(out temp);
+                if ((DateTime.UtcNow - temp).TotalMinutes > 1)
+                {
+                    RequestThrottler.ProcessedReviews.TryDequeue(out temp);
+                }
+                else
+                {
+                    break;
+                }
             }
             var totalReqs = RequestThrottler.ProcessedReviews.Count;
             totalReqs += RequestThrottler.ReviewsPending.Values.Sum(x => x > -1 ? 1 / RequestThrottler.BackgroundScraperPollFactor : 0);
