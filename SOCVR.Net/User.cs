@@ -329,7 +329,7 @@ namespace SOCVRDotNet
                     
                     if (isReviewing)
                     {
-                        CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                        completedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
                     }
                 }
                 catch (Exception ex)
