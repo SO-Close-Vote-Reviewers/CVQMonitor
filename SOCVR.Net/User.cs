@@ -39,6 +39,7 @@ namespace SOCVRDotNet
         private readonly EventManager evMan = new EventManager();
         private readonly Queue<int> revIDCache = new Queue<int>();
         private ScraperStatus ss;
+        private DateTime initialised;
         private int completedReviewsCount;
         private bool isReviewing;
         private bool dispose;
@@ -252,9 +253,11 @@ namespace SOCVRDotNet
             {
                 ProcessReview(id, throttle);
             }
+            
+            initialised = DateTime.UtcNow;
         }
 
-        private void ProcessReview(int reviewID, Action throttle)
+        private void ProcessReview(int reviewID, Action throttle, bool raiseEvents = true)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
@@ -268,18 +271,21 @@ namespace SOCVRDotNet
             if (revTime.Day == DateTime.UtcNow.Day)
             {
                 Reviews.Add(rev);
-                RequestThrottler.ProcessedReviews.Enqueu(DateTime.UtcNow);
+                RequestThrottler.ProcessedReviews.Enqueue(DateTime.UtcNow);
 
-                if (rev.AuditPassed != null)
+                if (raiseEvents)
                 {
-                    var evType = rev.AuditPassed == true ?
-                        EventType.AuditPassed :
-                        EventType.AuditFailed;
+                    if (rev.AuditPassed != null)
+                    {
+                        var evType = rev.AuditPassed == true ?
+                            EventType.AuditPassed :
+                            EventType.AuditFailed;
 
-                    evMan.CallListeners(evType, rev);
+                        evMan.CallListeners(evType, rev);
+                    }
+
+                    evMan.CallListeners(EventType.ItemReviewed, rev);
                 }
-
-                evMan.CallListeners(EventType.ItemReviewed, rev);
             }
         }
 
@@ -289,6 +295,20 @@ namespace SOCVRDotNet
 
             while (!dispose)
             {
+                Thread.Sleep(250);
+                
+                if ((DateTime.UtcNow - initialised).TotalMinutes < 1)
+                {
+                    if (CompletedReviewsCount >= GobalCacher.ReviewLimitCached(isMod))
+                    {
+                        limitHit = DateTime.UtcNow.Date;
+                    }
+                }
+                else
+                {
+                    continue;
+                }
+                
                 if (limitHit.Date != DateTime.UtcNow.Date &&
                     CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
                 {
@@ -296,9 +316,6 @@ namespace SOCVRDotNet
                     var revCpy = new HashSet<ReviewItem>(Reviews);
                     evMan.CallListeners(EventType.ReviewingCompleted, revCpy);
                 }
-
-                // Gasp, Thread.Sleep. Whatever...
-                Thread.Sleep(100);
             }
         }
 
