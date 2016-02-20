@@ -36,9 +36,11 @@ namespace SOCVRDotNet
         private readonly ManualResetEvent scraperThrottleMre = new ManualResetEvent(false);
         private readonly ManualResetEvent cvrCountUpdaterMre = new ManualResetEvent(false);
         private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
-        private EventManager evMan = new EventManager();
-        private Stack<int> revIDCache = new Stack<int>();
+        private readonly EventManager evMan = new EventManager();
+        private readonly Queue<int> revIDCache = new Queue<int>();
         private ScraperStatus ss;
+        private int completedReviewsCount;
+        private bool isReviewing;
         private bool dispose;
         private bool isMod;
         private string fkey;
@@ -79,7 +81,7 @@ namespace SOCVRDotNet
 
         public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
 
-        public int CompletedReviewsCount { get; private set; }
+        public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, reviewsCompletedCount); } }
 
         public int ID { get; private set; }
 
@@ -101,13 +103,23 @@ namespace SOCVRDotNet
             {
                 if (q != ReviewQueue.CloseVotes || id != ID || dispose) return;
 
-                RequestThrottler.ReviewsPending[ID]++;
-
-                if (ss == ScraperStatus.Inactive)
+                if (RequestThrottler.ReviewsPending[ID] != -1)
                 {
+                    RequestThrottler.ReviewsPending[ID]++;
+                }
+                else 
+                {
+                    RequestThrottler.ReviewsPending[ID] = 1;
+                }
+                
+                if (!isReviewing)
+                {
+                    isReviewing = true;
                     evMan.CallListeners(EventType.ReviewingStarted);
                 }
             };
+
+            RequestThrottler.PendingReviews[ID] = -1;
 
             // So many tasks, such little time.
             Task.Run(() => ResetDailyData());
@@ -184,6 +196,7 @@ namespace SOCVRDotNet
                 }
 
                 Reviews.Clear();
+                isReviewing = false;
             }
         }
 
@@ -195,8 +208,6 @@ namespace SOCVRDotNet
 
             while (ss == ScraperStatus.Active)
             {
-                var ws = Stopwatch.StartNew();
-
                 scraperThrottleMre.WaitOne(TimeSpan.FromMilliseconds(200));
 
                 if (RequestThrottler.ReviewsPending[ID] == 0) continue;
@@ -213,8 +224,7 @@ namespace SOCVRDotNet
                         RequestThrottler.ReviewsPending[ID]--;
                     }
 
-                    ws.Stop();
-                    var avg = ((ws.ElapsedMilliseconds / idsToFetch) / 2) + (DetectionLatency.Milliseconds / 2);
+                    var avg = ((DateTime.UtcNow - Reviews.Last().Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
                     DetectionLatency = TimeSpan.FromMilliseconds(avg);
                 }
                 catch (Exception ex)
@@ -241,7 +251,6 @@ namespace SOCVRDotNet
             foreach (var id in ids)
             {
                 ProcessReview(id, throttle);
-                throttle();
             }
         }
 
@@ -259,6 +268,7 @@ namespace SOCVRDotNet
             if (revTime.Day == DateTime.UtcNow.Day)
             {
                 Reviews.Add(rev);
+                RequestThrottler.ProcessedReviews.Enqueu(DateTime.UtcNow);
 
                 if (rev.AuditPassed != null)
                 {
