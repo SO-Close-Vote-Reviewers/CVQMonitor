@@ -354,12 +354,12 @@ namespace SOCVRDotNet
                     break;
                 }
             }
-            var totalReqs = RequestThrottler.ProcessedReviews.Count;
+            float totalReqs = RequestThrottler.ProcessedReviews.Count;
             totalReqs += RequestThrottler.ReviewsPending.Values.Sum(x => x > -1 ? 1 / RequestThrottler.BackgroundScraperPollFactor : 0);
             
-            var delayMin = toalReqs / RequestThrottler.RequestThroughputMin;
-            var secsPerReq = reqsPerMin * 60;
-            scesPerReq = isBgScraper ? secsPerReq * RequestThrottler.BackgroundScraperPollFactor : secsPerReq;
+            var delayMin = totalReqs / RequestThrottler.RequestThroughputMin;
+            var secsPerReq = delayMin * 60;
+            secsPerReq = isBgScraper ? secsPerReq * RequestThrottler.BackgroundScraperPollFactor : secsPerReq;
 
             return TimeSpan.FromSeconds(secsPerReq);
         }
