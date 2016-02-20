@@ -261,8 +261,8 @@ namespace SOCVRDotNet
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
-            revIDCache.Push(reviewID);
-            while (revIDCache.Count > GlobalCacher.ReviewLimitCached()) revIDCache.Pop();
+            revIDCache.Enqueue(reviewID);
+            while (revIDCache.Count > GlobalCacher.ReviewLimitCached()) revIDCache.Dequeue();
 
             throttle();
             var rev = new ReviewItem(reviewID, fkey);
@@ -299,7 +299,7 @@ namespace SOCVRDotNet
                 
                 if ((DateTime.UtcNow - initialised).TotalMinutes < 1)
                 {
-                    if (CompletedReviewsCount >= GobalCacher.ReviewLimitCached(isMod))
+                    if (CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
                     {
                         limitHit = DateTime.UtcNow.Date;
                     }
@@ -326,7 +326,11 @@ namespace SOCVRDotNet
                 try
                 {
                     cvrCountUpdaterMre.WaitOne(GetThrottlePeriod(RequestThrottler.BackgroundScraperPollFactor));
-                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                    
+                    if (isReviewing)
+                    {
+                        CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                    }
                 }
                 catch (Exception ex)
                 {
