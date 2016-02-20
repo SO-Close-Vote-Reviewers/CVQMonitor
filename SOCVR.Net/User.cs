@@ -36,7 +36,7 @@ namespace SOCVRDotNet
         private readonly ManualResetEvent scraperThrottleMre = new ManualResetEvent(false);
         private readonly ManualResetEvent cvrCountUpdaterMre = new ManualResetEvent(false);
         private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
-        private readonly EventManager evMan = new EventManager();
+        private EventManager evMan = new EventManager();
         private readonly Queue<int> revIDCache = new Queue<int>();
         private ScraperStatus ss;
         private DateTime initialised;
