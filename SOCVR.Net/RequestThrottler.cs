@@ -30,7 +30,7 @@ namespace SOCVRDotNet
         private static float bgScraperFactor = 8;
         private static float reqTp = 30;
 
-        internal static ConcurrentDictionary<int, ushort> ReviewsPending { get; set; } = new ConcurrentDictionary<int, ushort>();
+        internal static ConcurrentDictionary<int, short> ReviewsPending { get; set; } = new ConcurrentDictionary<int, short>();
 
         internal static ConcurrentQueue<DateTime> ProcessedReviews { get; set; } = new ConcurrentQueue<DateTime>();
 
