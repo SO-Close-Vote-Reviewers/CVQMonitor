@@ -339,10 +339,19 @@ namespace SOCVRDotNet
             }
         }
 
-        private TimeSpan GetThrottlePeriod(float multiplier = 1)
+        private TimeSpan GetThrottlePeriod(bool isBgScraper)
         {
-            var reqsPerMin = RequestThrottler.ReviewsPending.Values.Sum(x => x == 0 ? 1F / RequestThrottler.BackgroundScraperPollFactor : x) / RequestThrottler.RequestThroughputMin;
-            var secsPerReq = Math.Max(reqsPerMin * 60, 1) * multiplier;
+            while (((DateTime.UtcNow - RequestThrottler.ReviewsProcessed.TryPeek()).TotalMinutes > 1)
+            {
+                DateTime temp;
+                RequestThrottler.ReviewsProcessed.TryDequeue(out temp);
+            }
+            var totalReqs = RequestThrotter.ReviewsProcessed.Count;
+            totalReqs += RequestThrottler.ReviewsPending.Values.Sum(x => x > -1 ? 1 / RequestThrottler.BackgroundScraperPollFactor : 0);
+            
+            var delayMin = toalReqs / RequestThrottler.RequestThroughputMin;
+            var secsPerReq = reqsPerMin * 60;
+            scesPerReq = isBgScraper ? secsPerReq * RequestThrottler.BackgroundScraperPollFactoer : secsPerReq;
 
             return TimeSpan.FromSeconds(secsPerReq);
         }
