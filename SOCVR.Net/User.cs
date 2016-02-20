@@ -82,7 +82,7 @@ namespace SOCVRDotNet
 
         public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
 
-        public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, reviewsCompletedCount); } }
+        public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, completedReviewsCount); } }
 
         public int ID { get; private set; }
 
@@ -120,7 +120,7 @@ namespace SOCVRDotNet
                 }
             };
 
-            RequestThrottler.PendingReviews[ID] = -1;
+            RequestThrottler.ReviewsPending[ID] = -1;
 
             // So many tasks, such little time.
             Task.Run(() => ResetDailyData());
