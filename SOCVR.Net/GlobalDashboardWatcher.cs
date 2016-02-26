@@ -62,8 +62,6 @@ namespace SOCVRDotNet
             ws.OnError += (o, oo) => HandleException(oo.Exception);
             ws.OnClose += (o, oo) => HandleClose(oo);
             ws.Connect();
-
-            Console.WriteLine($"INFO| Master websocket started\nStack trace:\n{Environment.StackTrace}");
         }
 
         private static void HandleMessage(string message)

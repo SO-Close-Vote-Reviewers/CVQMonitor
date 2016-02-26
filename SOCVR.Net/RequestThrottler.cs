@@ -27,16 +27,20 @@ namespace SOCVRDotNet
 {
     public static class RequestThrottler
     {
-        private static float bgScraperFactor = 8;
-        private static float reqTp = 30;
+        private static float bgScraperFactor = 10;
+        private static float reqTp = 90;
 
-        internal static ConcurrentDictionary<int, ushort> ReviewsPending { get; set; } = new ConcurrentDictionary<int, ushort>();
+        internal const int ReqsPerReview = 2;
+
+        internal static ConcurrentDictionary<int, int> ReviewsPending { get; private set; } = new ConcurrentDictionary<int, int>();
+
+        internal static ConcurrentQueue<DateTime> ReviewsProcessed { get; private set; } = new ConcurrentQueue<DateTime>();
 
 
 
         /// <summary>
-        /// The maximum number of reviews (per minutes) to be processed.
-        /// (Default: 30.)
+        /// The maximum number of requests (per minutes) to be processed.
+        /// (Default: 90.)
         /// </summary>
         public static float RequestThroughputMin
         {
@@ -53,7 +57,7 @@ namespace SOCVRDotNet
         }
 
         /// <summary>
-        /// Default 8.
+        /// Default 10.
         /// </summary>
         public static float BackgroundScraperPollFactor
         {

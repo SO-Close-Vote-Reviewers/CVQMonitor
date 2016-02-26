@@ -106,7 +106,7 @@ namespace SOCVRDotNet
                     {
                         if (j.FirstElementChild == null ||
                             string.IsNullOrEmpty(j.FirstElementChild.Attributes["href"]) ||
-                            !j.FirstElementChild.Attributes["href"].StartsWith(@"/review/close/"))
+                            !j.FirstElementChild.Attributes["href"].StartsWith("/review/close/"))
                         {
                             continue;
                         }
