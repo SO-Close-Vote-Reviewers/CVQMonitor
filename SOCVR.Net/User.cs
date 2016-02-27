@@ -26,7 +26,7 @@ using System.Threading.Tasks;
 namespace SOCVRDotNet
 {
     /// <summary>
-    /// A Stack Overflow Chat user.
+    /// A Stack Overflow user.
     /// </summary>
     public class User : IDisposable
     {
@@ -97,7 +97,7 @@ namespace SOCVRDotNet
         public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
 
         /// <summary>
-        /// The number of completed reviews logged for the user.
+        /// The total number of completed reviews for the user.
         /// </summary>
         public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, completedReviewsCount); } }
 
