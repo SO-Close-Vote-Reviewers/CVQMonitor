@@ -24,17 +24,27 @@ using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// Provides a means of listening to chat events by "connecting listeners"
+    /// (Delegates) to event types.
+    /// </summary>
     public class EventManager : IDisposable
     {
         private bool disposed;
 
+        /// <summary>
+        /// The current collection of connected Delegates.
+        /// </summary>
         public ConcurrentDictionary<EventType, ConcurrentDictionary<int, Delegate>> ConnectedListeners { get; private set; }
 
-        public EventManager()
+        internal EventManager()
         {
             ConnectedListeners = new ConcurrentDictionary<EventType, ConcurrentDictionary<int, Delegate>>();
         }
 
+        /// <summary>
+        /// Deconstructor for this instance.
+        /// </summary>
         ~EventManager()
         {
             Dispose();
@@ -64,6 +74,9 @@ namespace SOCVRDotNet
             }
         }
 
+        /// <summary>
+        /// Disposes all resources used by this instance.
+        /// </summary>
         public void Dispose()
         {
             if (disposed) return;
@@ -76,6 +89,14 @@ namespace SOCVRDotNet
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Registers a Delegate to the specified event type.
+        /// </summary>
+        /// <param name="eventType">The event type to listen to.</param>
+        /// <param name="listener">The Delegate to invoke upon event activity.</param>
+        /// <exception cref="System.ArgumentException">
+        /// Thrown if the Delegate is already registered to the specified event type.
+        /// </exception>
         public void ConnectListener(EventType eventType, Delegate listener)
         {
             if (disposed) return;
@@ -100,6 +121,13 @@ namespace SOCVRDotNet
             }
         }
 
+        /// <summary>
+        /// Unregisters a Delegate from the specified event type.
+        /// </summary>
+        /// <param name="eventType">
+        /// The event type to which the Delegate was registered to.
+        /// </param>
+        /// <param name="listener">The Delegate to unregister.</param>
         public void DisconnectListener(EventType eventType, Delegate listener)
         {
             if (disposed) return;

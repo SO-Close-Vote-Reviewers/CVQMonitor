@@ -21,6 +21,9 @@ using System.Collections.Concurrent;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// Manages the request throughput for all created User instances.
+    /// </summary>
     public static class RequestThrottler
     {
         private static float bgScraperFactor = 10;

@@ -27,6 +27,9 @@ using System.Threading;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// Exposes methods for fetching review items completed by a user.
+    /// </summary>
     public static class UserDataFetcher
     {
         private static readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -71,6 +74,9 @@ namespace SOCVRDotNet
             return reviews;
         }
 
+        /// <summary>
+        /// A magical string needed to fetch review items.
+        /// </summary>
         public static string GetFkey()
         {
             var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");

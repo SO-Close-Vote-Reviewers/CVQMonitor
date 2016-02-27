@@ -80,6 +80,9 @@ namespace SOCVRDotNet
             }
         }
 
+        /// <summary>
+        /// Provides a means to (dis)connect event listeners (Delegates).
+        /// </summary>
         public EventManager EventManager => evMan;
 
         /// <summary>
@@ -87,6 +90,10 @@ namespace SOCVRDotNet
         /// </summary>
         public HashSet<ReviewItem> Reviews { get; } = new HashSet<ReviewItem>();
 
+        /// <summary>
+        /// The average duration between a user completing a
+        /// review item to the ItemReviewed event being raised.
+        /// </summary>
         public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
 
         /// <summary>
