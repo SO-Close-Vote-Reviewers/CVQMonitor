@@ -16,26 +16,20 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
-using System.Net;
-using System.Text;
 using CsQuery;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System;
-using System.Threading;
+using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace SOCVRDotNet
 {
     public static class UserDataFetcher
     {
         private static readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-
 
         /// <summary>
         /// Fetches the latest close vote review data.
@@ -84,8 +78,6 @@ namespace SOCVRDotNet
             var fkeyE = dom["input"].FirstOrDefault(e => e?.Attributes["name"] == "fkey");
             return fkeyE?.Attributes["value"];
         }
-
-
 
         internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount, Action throttler = null)
         {

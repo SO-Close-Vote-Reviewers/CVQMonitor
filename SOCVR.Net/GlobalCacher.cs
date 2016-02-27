@@ -16,13 +16,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
+using CsQuery;
 using System;
 using System.Linq;
-using CsQuery;
 
 namespace SOCVRDotNet
 {
@@ -46,8 +42,6 @@ namespace SOCVRDotNet
                 return fkey;
             }
         }
-
-
 
         public static int ReviewLimitCached(bool isMod = false)
         {

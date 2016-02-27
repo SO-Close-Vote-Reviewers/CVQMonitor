@@ -16,17 +16,13 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
+using CsQuery;
+using ServiceStack.Text;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Net;
 using System.Text;
-using CsQuery;
-using ServiceStack.Text;
 
 namespace SOCVRDotNet
 {
@@ -51,8 +47,6 @@ namespace SOCVRDotNet
         /// A list of tags that the reviewed questions was tagged with.
         /// </summary>
         public List<string> Tags { get; private set; }
-
-
 
         public ReviewItem(int reviewID, string fkey)
         {
@@ -79,8 +73,6 @@ namespace SOCVRDotNet
             PopulateTags(contentDom);
             CheckAudit(instructionsDom);
         }
-
-
 
         private void PopulateResults(CQ dom)
         {
@@ -115,20 +107,20 @@ namespace SOCVRDotNet
                         switch (j.InnerHTML)
                         {
                             case "Close":
-                            {
-                                action = ReviewAction.Close;
-                                break;
-                            }
+                                {
+                                    action = ReviewAction.Close;
+                                    break;
+                                }
                             case "Leave Open":
-                            {
-                                action = ReviewAction.LeaveOpen;
-                                break;
-                            }
+                                {
+                                    action = ReviewAction.LeaveOpen;
+                                    break;
+                                }
                             case "Edit":
-                            {
-                                action = ReviewAction.Edit;
-                                break;
-                            }
+                                {
+                                    action = ReviewAction.Edit;
+                                    break;
+                                }
                         }
                     }
                 }

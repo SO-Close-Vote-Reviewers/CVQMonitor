@@ -16,10 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
 using System;
 using System.Collections.Concurrent;
 
@@ -35,8 +31,6 @@ namespace SOCVRDotNet
         internal static ConcurrentDictionary<int, int> ReviewsPending { get; private set; } = new ConcurrentDictionary<int, int>();
 
         internal static ConcurrentQueue<DateTime> ReviewsProcessed { get; private set; } = new ConcurrentQueue<DateTime>();
-
-
 
         /// <summary>
         /// The maximum number of requests (per minutes) to be processed.

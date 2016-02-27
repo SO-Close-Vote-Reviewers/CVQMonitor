@@ -16,10 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
 using System;
 
 namespace SOCVRDotNet
@@ -49,8 +45,13 @@ namespace SOCVRDotNet
         /// </summary>
         public DateTime Timestamp { get; private set; }
 
-
-
+        /// <summary>
+        /// Creates a new ReviewResult object instance.
+        /// </summary>
+        /// <param name="userId">The user Id who made the review.</param>
+        /// <param name="userName">The name of the user who made the reivew.</param>
+        /// <param name="action">The action the user took in the reivew.</param>
+        /// <param name="timestamp">The date and time the review took place.</param>
         public ReviewResult(int userId, string userName, ReviewAction action, DateTime timestamp)
         {
             UserID = userId;
