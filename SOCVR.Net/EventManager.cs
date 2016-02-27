@@ -16,10 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -34,8 +30,6 @@ namespace SOCVRDotNet
 
         public ConcurrentDictionary<EventType, ConcurrentDictionary<int, Delegate>> ConnectedListeners { get; private set; }
 
-
-
         public EventManager()
         {
             ConnectedListeners = new ConcurrentDictionary<EventType, ConcurrentDictionary<int, Delegate>>();
@@ -46,13 +40,11 @@ namespace SOCVRDotNet
             Dispose();
         }
 
-
-
         internal void CallListeners(EventType eventType, params object[] args)
         {
-            if (disposed) return; 
-            if (!ConnectedListeners.ContainsKey(eventType)) return; 
-            if (ConnectedListeners[eventType].Keys.Count == 0) return; 
+            if (disposed) return;
+            if (!ConnectedListeners.ContainsKey(eventType)) return;
+            if (ConnectedListeners[eventType].Keys.Count == 0) return;
 
             foreach (var listener in ConnectedListeners[eventType].Values)
             {
