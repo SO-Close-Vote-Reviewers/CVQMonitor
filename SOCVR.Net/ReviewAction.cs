@@ -16,16 +16,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// Describes the action the user took in a cv review.
+    /// </summary>
     public enum ReviewAction
     {
+        /// <summary>
+        /// The user voted to leave the post open.
+        /// </summary>
         LeaveOpen,
+
+        /// <summary>
+        /// The user voted to close the vote.
+        /// </summary>
         Close,
+
+        /// <summary>
+        /// The user edited the post within the review queue.
+        /// </summary>
         Edit
     }
 }

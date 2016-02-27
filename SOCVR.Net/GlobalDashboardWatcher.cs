@@ -16,16 +16,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
+using ServiceStack.Text;
 using System;
 using System.Collections.Generic;
-using WebSocketSharp;
-using ServiceStack.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using WebSocketSharp;
 
 namespace SOCVRDotNet
 {
@@ -37,11 +33,12 @@ namespace SOCVRDotNet
         private static DateTime lastMsg = DateTime.MaxValue;
 
         public delegate void OnExceptionEventHandler(Exception ex);
+
         public delegate void UserEnteredQueueEventHandler(ReviewQueue queue, int userID);
+
         public static event UserEnteredQueueEventHandler UserEnteredQueue;
+
         public static event OnExceptionEventHandler OnException;
-
-
 
         static GlobalDashboardWatcher()
         {
@@ -50,8 +47,6 @@ namespace SOCVRDotNet
             InitialiseWS();
             Task.Run(() => RestartWS());
         }
-
-
 
         private static void InitialiseWS()
         {

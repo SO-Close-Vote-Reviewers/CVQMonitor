@@ -25,6 +25,8 @@ after_build:
 artifacts:
 - path: SOCVR.Net\bin\Release\SOCVR.Net.dll
   name: SOCVR.Net.dll
+- path: SOCVR.Net\bin\Release\SOCVR.Net.xml
+  name: SOCVR.Net.xml
 - path: '**\SOCVR.Net*.nupkg'
   
 deploy:
