@@ -26,6 +26,9 @@ using System.Text;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// A completed and parsed review item from the CV queue.
+    /// </summary>
     public class ReviewItem
     {
         /// <summary>
@@ -48,6 +51,11 @@ namespace SOCVRDotNet
         /// </summary>
         public List<string> Tags { get; private set; }
 
+        /// <summary>
+        /// Creates a new ReviewItem object instance.
+        /// </summary>
+        /// <param name="reviewID"></param>
+        /// <param name="fkey"></param>
         public ReviewItem(int reviewID, string fkey)
         {
             if (string.IsNullOrEmpty(fkey)) { throw new ArgumentException("'fkey' must not be null or empty.", "fkey"); }
