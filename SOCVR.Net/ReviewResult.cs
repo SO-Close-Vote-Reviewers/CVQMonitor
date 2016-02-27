@@ -49,8 +49,8 @@ namespace SOCVRDotNet
         /// Creates a new ReviewResult object instance.
         /// </summary>
         /// <param name="userId">The user Id who made the review.</param>
-        /// <param name="userName">The name of the user who made the reivew.</param>
-        /// <param name="action">The action the user took in the reivew.</param>
+        /// <param name="userName">The name of the user who made the review.</param>
+        /// <param name="action">The action the user took in the review.</param>
         /// <param name="timestamp">The date and time the review took place.</param>
         public ReviewResult(int userId, string userName, ReviewAction action, DateTime timestamp)
         {
