@@ -18,14 +18,44 @@
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// Describes the type of event that the User Tracker has triggered.
+    /// </summary>
     public enum EventType
     {
+        /// <summary>
+        /// An exception happened within the library.
+        /// </summary>
         InternalException = -1,
+
+        /// <summary>
+        /// A standard review item has been completed.
+        /// </summary>
         ItemReviewed,
+
+        /// <summary>
+        /// An audit has been passed.
+        /// </summary>
         AuditPassed,
+
+        /// <summary>
+        /// An audit has been failed.
+        /// </summary>
         AuditFailed,
+        
+        /// <summary>
+        /// The library detected the first review of the day for this user.
+        /// </summary>
         ReviewingStarted,
+
+        /// <summary>
+        /// The library detected the user has completed all review items for the day.
+        /// </summary>
         ReviewingCompleted,
+
+        /// <summary>
+        /// The library detected that the user has changed the tags they are reviewing.
+        /// </summary>
         CurrentTagsChanged
     }
 }
