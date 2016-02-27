@@ -180,6 +180,9 @@ namespace SOCVRDotNet
 
             evMan?.Dispose();
 
+            var temp = 0;
+            RequestThrottler.ReviewsPending.TryRemove(ID, out temp);
+
             GC.SuppressFinalize(this);
         }
 
