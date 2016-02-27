@@ -16,10 +16,6 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,6 +25,9 @@ using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// A Stack Overflow Chat user.
+    /// </summary>
     public class User : IDisposable
     {
         private readonly ManualResetEvent initialisationMre = new ManualResetEvent(false);
@@ -45,6 +44,9 @@ namespace SOCVRDotNet
         private bool isMod;
         private string fkey;
 
+        /// <summary>
+        /// Calculates the average review speed for all recorded reviews.
+        /// </summary>
         public TimeSpan AvgDurationPerReview
         {
             get
@@ -61,6 +63,9 @@ namespace SOCVRDotNet
             }
         }
 
+        /// <summary>
+        /// Gets the time between the first and last logged review.
+        /// </summary>
         public TimeSpan ReviewSessionDuration
         {
             get
@@ -77,16 +82,27 @@ namespace SOCVRDotNet
 
         public EventManager EventManager => evMan;
 
+        /// <summary>
+        /// Gets a list of all logged reviews for the user.
+        /// </summary>
         public HashSet<ReviewItem> Reviews { get; } = new HashSet<ReviewItem>();
 
         public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
 
+        /// <summary>
+        /// The number of completed reviews logged for the user.
+        /// </summary>
         public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, completedReviewsCount); } }
 
+        /// <summary>
+        /// The user's profile Id number.
+        /// </summary>
         public int ID { get; private set; }
 
-
-
+        /// <summary>
+        /// Creates a new User object instance using a given profile Id.
+        /// </summary>
+        /// <param name="userID">The profile id of the user. This is the same number as in the profile url.</param>
         public User(int userID)
         {
             if (RequestThrottler.ReviewsPending.ContainsKey(userID))
@@ -127,13 +143,17 @@ namespace SOCVRDotNet
             Task.Run(() => ScrapeData());
         }
 
+        /// <summary>
+        /// Deconstructor for this instance.
+        /// </summary>
         ~User()
         {
             Dispose();
         }
 
-
-
+        /// <summary>
+        /// Disposes all resources used by this instance.
+        /// </summary>
         public void Dispose()
         {
             if (dispose) return;
@@ -156,6 +176,11 @@ namespace SOCVRDotNet
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Tells if the given user is a moderator on Stack Overflow.
+        /// </summary>
+        /// <param name="userID">The user id to look up.</param>
+        /// <returns></returns>
         public static bool IsModerator(int userID)
         {
             try
@@ -170,8 +195,6 @@ namespace SOCVRDotNet
                 return false;
             }
         }
-
-
 
         private void FetchTodaysReviews()
         {
