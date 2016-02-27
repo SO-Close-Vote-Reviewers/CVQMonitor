@@ -16,26 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
-using System.Net;
-using System.Text;
 using CsQuery;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System;
-using System.Threading;
+using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// Exposes methods for fetching review items completed by a user.
+    /// </summary>
     public static class UserDataFetcher
     {
         private static readonly Regex todaysReviewCount = new Regex(@"(?i)today \d+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-
 
         /// <summary>
         /// Fetches the latest close vote review data.
@@ -77,6 +74,9 @@ namespace SOCVRDotNet
             return reviews;
         }
 
+        /// <summary>
+        /// A magical string needed to fetch review items.
+        /// </summary>
         public static string GetFkey()
         {
             var html = new WebClient().DownloadString("https://stackoverflow.com/users/login");
@@ -84,8 +84,6 @@ namespace SOCVRDotNet
             var fkeyE = dom["input"].FirstOrDefault(e => e?.Attributes["name"] == "fkey");
             return fkeyE?.Attributes["value"];
         }
-
-
 
         internal static List<int> GetLastestCVReviewIDs(string fkey, int userID, int reviewCount, Action throttler = null)
         {
@@ -106,7 +104,7 @@ namespace SOCVRDotNet
                     {
                         if (j.FirstElementChild == null ||
                             string.IsNullOrEmpty(j.FirstElementChild.Attributes["href"]) ||
-                            !j.FirstElementChild.Attributes["href"].StartsWith(@"/review/close/"))
+                            !j.FirstElementChild.Attributes["href"].StartsWith("/review/close/"))
                         {
                             continue;
                         }

@@ -26,5 +26,6 @@
     </metadata>
     <files>
         <file src="..\SOCVR.Net\bin\Release\SOCVR.Net.dll" target="lib\SOCVR.Net.dll" />
+        <file src="..\SOCVR.Net\bin\Release\SOCVR.Net.xml" target="lib\SOCVR.Net.xml" />
     </files>
 </package>

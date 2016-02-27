@@ -16,20 +16,19 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
-
-
-
+using CsQuery;
+using ServiceStack.Text;
 using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Net;
 using System.Text;
-using CsQuery;
-using ServiceStack.Text;
 
 namespace SOCVRDotNet
 {
+    /// <summary>
+    /// A completed and parsed review item from the CV queue.
+    /// </summary>
     public class ReviewItem
     {
         /// <summary>
@@ -52,8 +51,11 @@ namespace SOCVRDotNet
         /// </summary>
         public List<string> Tags { get; private set; }
 
-
-
+        /// <summary>
+        /// Creates a new ReviewItem object instance.
+        /// </summary>
+        /// <param name="reviewID"></param>
+        /// <param name="fkey"></param>
         public ReviewItem(int reviewID, string fkey)
         {
             if (string.IsNullOrEmpty(fkey)) { throw new ArgumentException("'fkey' must not be null or empty.", "fkey"); }
@@ -79,8 +81,6 @@ namespace SOCVRDotNet
             PopulateTags(contentDom);
             CheckAudit(instructionsDom);
         }
-
-
 
         private void PopulateResults(CQ dom)
         {
@@ -115,20 +115,20 @@ namespace SOCVRDotNet
                         switch (j.InnerHTML)
                         {
                             case "Close":
-                            {
-                                action = ReviewAction.Close;
-                                break;
-                            }
+                                {
+                                    action = ReviewAction.Close;
+                                    break;
+                                }
                             case "Leave Open":
-                            {
-                                action = ReviewAction.LeaveOpen;
-                                break;
-                            }
+                                {
+                                    action = ReviewAction.LeaveOpen;
+                                    break;
+                                }
                             case "Edit":
-                            {
-                                action = ReviewAction.Edit;
-                                break;
-                            }
+                                {
+                                    action = ReviewAction.Edit;
+                                    break;
+                                }
                         }
                     }
                 }
