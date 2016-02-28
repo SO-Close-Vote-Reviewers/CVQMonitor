@@ -414,7 +414,7 @@ namespace SOCVRDotNet
             var reqsProcessed = RequestThrottler.ReviewsProcessed.Count * RequestThrottler.ReqsPerReview;
             var bgPollers = RequestThrottler.ReviewsPending.Values.Count(x => x > -1);
             var totalReqsPerMin = reqsProcessed * (1 + ((1 / fct) * bgPollers));
-            totalReqsPerMin = totalReqsPerMin == 0 ? 1 / bgPollers : totalReqsPerMin;
+            totalReqsPerMin = totalReqsPerMin == 0 ? 1 / fct : totalReqsPerMin;
             var secsPerReq = 60 / (RequestThrottler.RequestThroughputMin - totalReqsPerMin);
             secsPerReq *= bgPoller ? fct : 1;
             secsPerReq = bgPoller ? secsPerReq < fct ? fct : secsPerReq : secsPerReq;
