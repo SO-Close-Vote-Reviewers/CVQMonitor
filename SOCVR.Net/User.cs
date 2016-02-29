@@ -208,21 +208,21 @@ namespace SOCVRDotNet
 
         private void FetchTodaysReviews()
         {
-            var throttle = new Action(() => initialisationMre.WaitOne(2000));
-            var idsToFetch = (int)Math.Round(Math.Max(GetThrottlePeriod().TotalSeconds / 5, 3));
-            var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle)
-                .Where(id => Reviews.All(r => r.ID != id));
+            //var throttle = new Action(() => initialisationMre.WaitOne(2000));
+            //var idsToFetch = (int)Math.Round(Math.Max(GetThrottlePeriod().TotalSeconds / 5, 3));
+            //var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle)
+            //    .Where(id => Reviews.All(r => r.ID != id));
 
-            if (!isMod)
-            {
-                idsToFetch = Math.Max(GlobalCacher.ReviewLimitCached() - revIDCache.Count, idsToFetch);
-            }
+            //if (!isMod)
+            //{
+            //    idsToFetch = Math.Max(GlobalCacher.ReviewLimitCached() - revIDCache.Count, idsToFetch);
+            //}
 
-            foreach (var id in ids)
-            {
-                ProcessReview(id, throttle, false);
-                throttle();
-            }
+            //foreach (var id in ids)
+            //{
+            //    ProcessReview(id, throttle, false);
+            //    throttle();
+            //}
 
             completedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
@@ -414,7 +414,7 @@ namespace SOCVRDotNet
             var reqsProcessed = RequestThrottler.ReviewsProcessed.Count * RequestThrottler.ReqsPerReview;
             var bgPollers = RequestThrottler.ReviewsPending.Values.Count(x => x > -1);
             var totalReqsPerMin = reqsProcessed * (1 + ((1 / fct) * bgPollers));
-            totalReqsPerMin = totalReqsPerMin == 0 ? 1 / fct : totalReqsPerMin;
+            totalReqsPerMin = totalReqsPerMin == 0 ? fct / 60 : totalReqsPerMin;
             var secsPerReq = 60 / (RequestThrottler.RequestThroughputMin - totalReqsPerMin);
             secsPerReq *= bgPoller ? fct : 1;
             secsPerReq = bgPoller ? secsPerReq < fct ? fct : secsPerReq : secsPerReq;
