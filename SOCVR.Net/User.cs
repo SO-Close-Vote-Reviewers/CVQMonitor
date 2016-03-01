@@ -34,15 +34,19 @@ namespace SOCVRDotNet
         private readonly ManualResetEvent scraperThrottleMre = new ManualResetEvent(false);
         private readonly ManualResetEvent cvrCountUpdaterMre = new ManualResetEvent(false);
         private readonly ManualResetEvent dailyResetMre = new ManualResetEvent(false);
+        private readonly Queue<DateTime> revTimes = new Queue<DateTime>();
         private readonly Queue<int> revIDCache = new Queue<int>();
+        private readonly Func<ReviewItem, DateTime> revItemSelector;
         private EventManager evMan = new EventManager();
-        private bool initialised;
+        private DateTime revStartTime;
+        private DateTime lastRevTime;
         private ScraperStatus ss;
-        private int completedReviewsCount;
+        private int reviewsPending; //TODO: Use this field for calcing how many reviews to fetch.
         private bool reviewing;
         private bool dispose;
         private bool isMod;
         private string fkey;
+
 
         /// <summary>
         /// Calculates the average review speed for all recorded reviews.
@@ -51,15 +55,12 @@ namespace SOCVRDotNet
         {
             get
             {
-                if ((Reviews?.Count ?? 0) > 1)
+                if (ReviewSessionDuration != TimeSpan.MinValue)
                 {
-                    var revRes = Reviews.Select(r => r.Results.First(rr => rr.UserID == ID));
-                    var revDur = revRes.Max(r => r.Timestamp) - revRes.Min(r => r.Timestamp);
-
-                    return new TimeSpan(revDur.Ticks / (CompletedReviewsCount - 1));
+                    return TimeSpan.FromSeconds(ReviewSessionDuration.TotalSeconds / Reviews.Count);
                 }
 
-                return TimeSpan.MinValue;
+                return TimeSpan.FromSeconds(20);
             }
         }
 
@@ -72,8 +73,11 @@ namespace SOCVRDotNet
             {
                 if ((Reviews?.Count ?? 0) > 1)
                 {
-                    var revRes = Reviews.Select(r => r.Results.First(rr => rr.UserID == ID));
-                    return revRes.Max(r => r.Timestamp) - revRes.Min(r => r.Timestamp);
+                    var latestRevTime = Reviews.Max(revItemSelector);
+                    var firstRevTime = Reviews.Min(revItemSelector);
+                    var durRaw = latestRevTime - firstRevTime;
+
+                    return TimeSpan.FromSeconds((durRaw.TotalSeconds / Reviews.Count) * (Reviews.Count + 1));
                 }
 
                 return TimeSpan.MinValue;
@@ -94,12 +98,12 @@ namespace SOCVRDotNet
         /// The average duration between a user completing a
         /// review item to the ItemReviewed event being raised.
         /// </summary>
-        public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromMilliseconds(500);
+        public TimeSpan DetectionLatency { get; private set; } = TimeSpan.FromSeconds(1);
 
         /// <summary>
         /// The total number of completed reviews for the user.
         /// </summary>
-        public int CompletedReviewsCount { get { return Math.Max(Reviews.Count, completedReviewsCount); } }
+        public int CompletedReviewsCount { get; private set; }
 
         /// <summary>
         /// The user's profile Id number.
@@ -112,41 +116,34 @@ namespace SOCVRDotNet
         /// <param name="userID">The profile id of the user. This is the same number as in the profile url.</param>
         public User(int userID)
         {
-            if (RequestThrottler.ReviewsPending.ContainsKey(userID))
-            {
-                throw new ArgumentException("Cannot create duplicate User instances.", nameof(userID));
-            }
-
             isMod = IsModerator(userID);
             ID = userID;
-            fkey = GlobalCacher.FkeyCached;
-            RequestThrottler.ReviewsPending[userID] = -1;
+            fkey = GlobalCacher.Fkey;
+            revItemSelector = new Func<ReviewItem, DateTime>(r => r.Results.Single(rr => rr.UserID == ID).Timestamp);
             GlobalDashboardWatcher.OnException += ex => EventManager.CallListeners(EventType.InternalException, ex);
             GlobalDashboardWatcher.UserEnteredQueue += (q, id) =>
             {
                 if (q != ReviewQueue.CloseVotes || id != ID || dispose) return;
 
-                if (RequestThrottler.ReviewsPending[ID] != -1)
-                {
-                    RequestThrottler.ReviewsPending[ID]++;
-                }
-                else
-                {
-                    RequestThrottler.ReviewsPending[ID] = 1;
-                }
+                while (revTimes.Count > 5) revTimes.Dequeue();
+                revTimes.Enqueue(DateTime.UtcNow);
+                lastRevTime = DateTime.UtcNow;
+                reviewsPending++;
 
                 if (!reviewing)
                 {
                     reviewing = true;
                     evMan.CallListeners(EventType.ReviewingStarted);
+                    revStartTime = DateTime.UtcNow;
+                }
+
+                if (reviewsPending + CompletedReviewsCount >= GlobalCacher.ReviewLimit(isMod))
+                {
+                    evMan.CallListeners(EventType.ReviewingCompleted);
                 }
             };
 
-            // So many tasks, such little time.
             Task.Run(() => ResetDailyData());
-            Task.Run(() => FetchTodaysReviews());
-            Task.Run(() => CheckForLimitReached());
-            Task.Run(() => CvrCountUpdater());
             Task.Run(() => ScrapeData());
         }
 
@@ -180,9 +177,6 @@ namespace SOCVRDotNet
 
             evMan?.Dispose();
 
-            var temp = 0;
-            RequestThrottler.ReviewsPending.TryRemove(ID, out temp);
-
             GC.SuppressFinalize(this);
         }
 
@@ -206,29 +200,6 @@ namespace SOCVRDotNet
             }
         }
 
-        private void FetchTodaysReviews()
-        {
-            //var throttle = new Action(() => initialisationMre.WaitOne(2000));
-            //var idsToFetch = (int)Math.Round(Math.Max(GetThrottlePeriod().TotalSeconds / 5, 3));
-            //var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle)
-            //    .Where(id => Reviews.All(r => r.ID != id));
-
-            //if (!isMod)
-            //{
-            //    idsToFetch = Math.Max(GlobalCacher.ReviewLimitCached() - revIDCache.Count, idsToFetch);
-            //}
-
-            //foreach (var id in ids)
-            //{
-            //    ProcessReview(id, throttle, false);
-            //    throttle();
-            //}
-
-            completedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
-
-            initialised = true;
-        }
-
         private void ResetDailyData()
         {
             while (!dispose)
@@ -241,7 +212,7 @@ namespace SOCVRDotNet
                 {
                     ss = ScraperStatus.ShutdownRequested;
                 }
-                fkey = GlobalCacher.FkeyCached;
+                fkey = GlobalCacher.Fkey;
                 reviewing = false;
 
                 // Wait for the scraper to die before clearing Reviews.
@@ -258,34 +229,40 @@ namespace SOCVRDotNet
 
         private void ScrapeData()
         {
+            var checkCount = false;
             ss = ScraperStatus.Active;
 
-            var throttle = new Action(() => scraperThrottleMre.WaitOne(GetThrottlePeriod()));
-
-            while (ss == ScraperStatus.Active)
+            while (ss == ScraperStatus.Active && !dispose)
             {
-                scraperThrottleMre.WaitOne(TimeSpan.FromMilliseconds(100));
+                scraperThrottleMre.WaitOne(500);
 
-                if (RequestThrottler.ReviewsPending[ID] < 1) continue;
+                if (!reviewing || HandleInactivity(ref checkCount)) continue;
+
+                RevBasedThrottle(0.5);
 
                 try
                 {
-                    // Check the review before the current to
-                    // catch any audits we may have missed.
-                    var idsToFetch = RequestThrottler.ReviewsPending[ID] + 1;
-                    var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle);
+                    var idsToFetch = (int)Math.Round(Math.Max(reviewsPending, 1) * 1.5);
+                    reviewsPending = 0;
+                    Throttle(1);
+                    var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch);
 
                     foreach (var id in ids)
                     {
-                        ProcessReview(id, throttle);
-                        RequestThrottler.ReviewsPending[ID]--;
+                        ProcessReview(id);
                     }
 
-                    // Compensate for the extra decrement when checking for audits.
-                    RequestThrottler.ReviewsPending[ID]++;
+                    if (checkCount)
+                    {
+                        Throttle(1);
+                        CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+                    }
+                    checkCount = !checkCount;
 
-                    var avg = ((DateTime.UtcNow - Reviews.Last().Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
-                    DetectionLatency = TimeSpan.FromMilliseconds(avg);
+                    if (Math.Max(CompletedReviewsCount, Reviews.Count) >= GlobalCacher.ReviewLimit(isMod))
+                    {
+                        HandleReviewingCompleted();
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -296,130 +273,89 @@ namespace SOCVRDotNet
             ss = ScraperStatus.Inactive;
         }
 
-        private void ProcessReview(int reviewID, Action throttle, bool raiseEvent = true)
+        private bool HandleInactivity(ref bool checkCount)
+        {
+            // Continue checking the review count if we don't get any new
+            // reviews for a bit (the user may have reviewed a deleted audit).
+            // (The user may also just be afk.)
+            if ((DateTime.UtcNow - lastRevTime).TotalMinutes > 3)
+            {
+                RevBasedThrottle();
+
+                Throttle(1);
+                CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+
+                if (Math.Max(CompletedReviewsCount, Reviews.Count) >= GlobalCacher.ReviewLimit(isMod))
+                {
+                    HandleReviewingCompleted();
+                }
+
+                checkCount = false;
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ProcessReview(int reviewID)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
             revIDCache.Enqueue(reviewID);
-            while (revIDCache.Count > GlobalCacher.ReviewLimitCached()) revIDCache.Dequeue();
+            while (revIDCache.Count > GlobalCacher.ReviewLimit()) revIDCache.Dequeue();
 
-            throttle();
+            Throttle(1);
             var rev = new ReviewItem(reviewID, fkey);
+            var revTime = rev.Results.Single(x => x.UserID == ID).Timestamp;
+
+            if (revTime.Date != DateTime.UtcNow.Date ||
+                (revStartTime > revTime &&
+                (revStartTime - revTime).TotalMinutes > 3))
+            {
+                return;
+            }
+            var avg = ((DateTime.UtcNow - rev.Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
+            DetectionLatency = TimeSpan.FromMilliseconds(avg);
 
             Reviews.Add(rev);
-            RequestThrottler.ReviewsProcessed.Enqueue(DateTime.UtcNow);
 
-            if (raiseEvent)
+            if (rev.AuditPassed != null)
             {
-                if (rev.AuditPassed != null)
-                {
-                    var evType = rev.AuditPassed == true ?
-                        EventType.AuditPassed :
-                        EventType.AuditFailed;
+                var evType = rev.AuditPassed == true ?
+                    EventType.AuditPassed :
+                    EventType.AuditFailed;
 
-                    evMan.CallListeners(evType, rev);
-                }
-
-                evMan.CallListeners(EventType.ItemReviewed, rev);
+                evMan.CallListeners(evType, rev);
             }
+
+            evMan.CallListeners(EventType.ItemReviewed, rev);
         }
 
-        private void CheckForLimitReached()
+        private void HandleReviewingCompleted()
         {
-            DateTime? limitHit = null;
-
-            while (!dispose)
-            {
-                // Gasp, Thread.Sleep()... whatever.
-                Thread.Sleep(200);
-
-                if (!initialised)
-                {
-                    continue;
-                }
-                else
-                {
-                    if (limitHit == null)
-                    {
-                        if (CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
-                        {
-                            limitHit = DateTime.UtcNow.Date;
-                        }
-                        else
-                        {
-                            limitHit = DateTime.UtcNow.AddDays(-1);
-                        }
-                    }
-                }
-
-                if (limitHit?.Date != DateTime.UtcNow.Date &&
-                    CompletedReviewsCount >= GlobalCacher.ReviewLimitCached(isMod))
-                {
-                    limitHit = DateTime.UtcNow.Date;
-                    reviewing = false;
-
-                    // Check if the last review just happened to be an audit.
-                    if (Reviews.Count != GlobalCacher.ReviewLimitCached())
-                    {
-                        var throttle = new Action(() => scraperThrottleMre.WaitOne(GetThrottlePeriod()));
-                        var id = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, 1, throttle).Single();
-                        ProcessReview(id, throttle);
-                    }
-
-                    var revCpy = new HashSet<ReviewItem>(Reviews);
-                    evMan.CallListeners(EventType.ReviewingCompleted, revCpy);
-                }
-            }
+            reviewing = false;
+            evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
         }
 
-        private void CvrCountUpdater()
+        private void Throttle(int reqsMade)
         {
-            while (!dispose)
+            while (RequestThrottler.RequestsRemaining - reqsMade < 0)
             {
-                cvrCountUpdaterMre.WaitOne(GetThrottlePeriod(true));
-
-                var revsPend = RequestThrottler.ReviewsPending[ID];
-
-                if (!reviewing)
-                {
-                    RequestThrottler.ReviewsPending[ID] = revsPend == 0 ? -1 : revsPend;
-                    continue;
-                }
-                else
-                {
-                    RequestThrottler.ReviewsPending[ID] = revsPend == -1 ? 0 : revsPend;
-                }
-
-                try
-                {
-                    completedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
-                }
-                catch (Exception ex)
-                {
-                    evMan.CallListeners(EventType.InternalException, ex);
-                }
+                scraperThrottleMre.WaitOne(TimeSpan.FromSeconds(60D / RequestThrottler.RequestThroughputMin));
             }
+
+            RequestThrottler.RequestsRemaining -= reqsMade;
         }
 
-        private TimeSpan GetThrottlePeriod(bool bgPoller = false)
+        private void RevBasedThrottle(double factor = 1)
         {
-            DateTime timestamp;
-            while (RequestThrottler.ReviewsProcessed.TryPeek(out timestamp) && (DateTime.UtcNow - timestamp).TotalMinutes > 1)
+            if (revTimes.Count == 0) return;
+
+            for (var i = 0; i < 3; i++)
             {
-                DateTime temp;
-                RequestThrottler.ReviewsProcessed.TryDequeue(out temp);
+                var wait = TimeSpan.FromSeconds((revTimes.Average(t => (DateTime.UtcNow - t).TotalSeconds) / 3) * factor);
+                scraperThrottleMre.WaitOne(wait);
             }
-
-            var fct = RequestThrottler.BackgroundScraperPollFactor;
-            var reqsProcessed = RequestThrottler.ReviewsProcessed.Count * RequestThrottler.ReqsPerReview;
-            var bgPollers = RequestThrottler.ReviewsPending.Values.Count(x => x > -1);
-            var totalReqsPerMin = reqsProcessed * (1 + ((1 / fct) * bgPollers));
-            totalReqsPerMin = totalReqsPerMin == 0 ? fct / 60 : totalReqsPerMin;
-            var secsPerReq = 60 / (RequestThrottler.RequestThroughputMin - totalReqsPerMin);
-            secsPerReq *= bgPoller ? fct : 1;
-            secsPerReq = bgPoller ? secsPerReq < fct ? fct : secsPerReq : secsPerReq;
-
-            return TimeSpan.FromSeconds(secsPerReq);
         }
     }
 }

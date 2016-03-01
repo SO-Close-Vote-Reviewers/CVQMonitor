@@ -17,7 +17,8 @@
  */
 
 using System;
-using System.Collections.Concurrent;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
@@ -26,20 +27,15 @@ namespace SOCVRDotNet
     /// </summary>
     public static class RequestThrottler
     {
-        private static float bgScraperFactor = 10;
-        private static float reqTp = 90;
+        private static int reqTp = 90;
 
-        internal const int ReqsPerReview = 2;
-
-        internal static ConcurrentDictionary<int, int> ReviewsPending { get; private set; } = new ConcurrentDictionary<int, int>();
-
-        internal static ConcurrentQueue<DateTime> ReviewsProcessed { get; private set; } = new ConcurrentQueue<DateTime>();
+        internal static int RequestsRemaining { get; set; }
 
         /// <summary>
         /// The maximum number of requests (per minutes) to be processed.
         /// (Default: 90.)
         /// </summary>
-        public static float RequestThroughputMin
+        public static int RequestThroughputMin
         {
             get
             {
@@ -53,21 +49,15 @@ namespace SOCVRDotNet
             }
         }
 
-        /// <summary>
-        /// Default 10.
-        /// </summary>
-        public static float BackgroundScraperPollFactor
-        {
-            get
-            {
-                return bgScraperFactor;
-            }
-            set
-            {
-                if (value < 0 && value != 0) throw new ArgumentOutOfRangeException("value", "Must be a positive number (and not zero).");
 
-                bgScraperFactor = value;
-            }
+        static RequestThrottler()
+        {
+            Task.Run(() =>
+            {
+                RequestsRemaining = RequestThroughputMin;
+
+                Thread.Sleep(60000); // 1 min.
+            });
         }
     }
 }

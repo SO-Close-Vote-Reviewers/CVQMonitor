@@ -29,7 +29,7 @@ namespace SOCVRDotNet
         private static DateTime lastFkeyFetch = DateTime.UtcNow;
         private static DateTime lastRevCountFetch = DateTime.UtcNow;
 
-        public static string FkeyCached
+        public static string Fkey
         {
             get
             {
@@ -43,7 +43,7 @@ namespace SOCVRDotNet
             }
         }
 
-        public static int ReviewLimitCached(bool isMod = false)
+        public static int ReviewLimit(bool isMod = false)
         {
             if (isMod) return int.MaxValue;
 
