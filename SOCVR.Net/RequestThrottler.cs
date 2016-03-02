@@ -17,6 +17,7 @@
  */
 
 using System;
+using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -27,15 +28,17 @@ namespace SOCVRDotNet
     /// </summary>
     public static class RequestThrottler
     {
-        private static int reqTp = 90;
+        private static float reqTp = 60;
 
-        internal static int RequestsRemaining { get; set; }
+        internal static float RequestsRemaining { get; set; }
+
+        internal static ConcurrentDictionary<int, bool> ActiveUsers { get; set; } = new ConcurrentDictionary<int, bool>();
 
         /// <summary>
         /// The maximum number of requests (per minutes) to be processed.
-        /// (Default: 90.)
+        /// (Default: 60.)
         /// </summary>
-        public static int RequestThroughputMin
+        public static float RequestThroughputMin
         {
             get
             {
@@ -48,7 +51,6 @@ namespace SOCVRDotNet
                 reqTp = value;
             }
         }
-
 
         static RequestThrottler()
         {
