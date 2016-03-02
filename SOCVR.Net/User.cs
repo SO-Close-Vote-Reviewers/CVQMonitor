@@ -202,8 +202,8 @@ namespace SOCVRDotNet
 
                 fkey = GlobalCacher.Fkey;
                 reviewing = false;
+                RequestThrottler.ActiveUsers[ID] = false;
                 Reviews.Clear();
-                reviewing = false;
             }
         }
 
