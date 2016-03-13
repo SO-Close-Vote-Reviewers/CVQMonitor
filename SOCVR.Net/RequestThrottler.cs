@@ -52,14 +52,14 @@ namespace SOCVRDotNet
             }
         }
 
-        static RequestThrottler()
-        {
-            Task.Run(() =>
-            {
-                RequestsRemaining = RequestThroughputMin;
+        //static RequestThrottler()
+        //{
+        //    Task.Run(() =>
+        //    {
+        //        RequestsRemaining = RequestThroughputMin;
 
-                Thread.Sleep(60000); // 1 min.
-            });
-        }
+        //        Thread.Sleep(60000); // 1 min.
+        //    });
+        //}
     }
 }

@@ -200,43 +200,39 @@ namespace SOCVRDotNet
 
                 dailyResetMre.WaitOne(wait);
 
-                fkey = GlobalCacher.Fkey;
                 reviewing = false;
                 RequestThrottler.ActiveUsers[ID] = false;
+                fkey = GlobalCacher.Fkey;
                 Reviews.Clear();
             }
         }
 
         private void ScrapeData()
         {
-            var checkCount = false;
+            var throttle = new Action(() => scraperThrottleMre.WaitOne(TimeSpan.FromSeconds(RequestThrottler.ActiveUsers.Values.Count(x => x) / 3D * 2)));
 
             while (!dispose)
             {
-                scraperThrottleMre.WaitOne(500);
+                scraperThrottleMre.WaitOne(100);
 
                 if (!reviewing) continue;
 
-                Throttle();
-
                 try
                 {
+                    throttle();
                     var idsToFetch = (int)Math.Round(Math.Max(reviewsPending, 1) * 1.5);
                     reviewsPending = 0;
                     var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch);
 
                     foreach (var id in ids)
                     {
-                        ProcessReview(id);
+                        ProcessReview(id, throttle);
                     }
 
-                    if (checkCount)
-                    {
-                        CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
-                    }
-                    checkCount = !checkCount;
+                    throttle();
+                    CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
 
-                    if (Math.Max(CompletedReviewsCount, Reviews.Count) >= GlobalCacher.ReviewLimit(isMod))
+                    if (CompletedReviewsCount >= GlobalCacher.ReviewLimit(isMod))
                     {
                         HandleReviewingCompleted();
                     }
@@ -248,13 +244,14 @@ namespace SOCVRDotNet
             }
         }
 
-        private void ProcessReview(int reviewID)
+        private void ProcessReview(int reviewID, Action throttle)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
             revIDCache.Enqueue(reviewID);
             while (revIDCache.Count > GlobalCacher.ReviewLimit()) revIDCache.Dequeue();
 
+            throttle();
             var rev = new ReviewItem(reviewID, fkey);
             var revTime = rev.Results.Single(x => x.UserID == ID).Timestamp;
 
@@ -264,6 +261,7 @@ namespace SOCVRDotNet
             {
                 return;
             }
+
             var avg = ((DateTime.UtcNow - rev.Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
             DetectionLatency = TimeSpan.FromMilliseconds(avg);
 
@@ -286,12 +284,6 @@ namespace SOCVRDotNet
             reviewing = false;
             RequestThrottler.ActiveUsers[ID] = false;
             evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
-        }
-
-        private void Throttle()
-        {
-            var seconds = Math.Log(Math.E + Math.Pow(RequestThrottler.ActiveUsers.Values.Count(x => x), 2)) * 3;
-            scraperThrottleMre.WaitOne(TimeSpan.FromSeconds(seconds));
         }
     }
 }
