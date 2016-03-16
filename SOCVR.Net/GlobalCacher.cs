@@ -67,7 +67,7 @@ namespace SOCVRDotNet
                 lastRevCountFetch = DateTime.UtcNow;
             }
 
-            return (revCount ?? 1000) >= 1000 ? 40 : 20;
+            return 30 * ((revCount ?? 1000) >= 1000 ? 2 : 1);
         }
     }
 }
