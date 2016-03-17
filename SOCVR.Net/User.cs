@@ -209,7 +209,7 @@ namespace SOCVRDotNet
 
         private void ScrapeData()
         {
-            var throttle = new Action(() => scraperThrottleMre.WaitOne(TimeSpan.FromSeconds(RequestThrottler.ActiveUsers.Values.Count(x => x) / 3D * 2)));
+            var throttle = new Action(() => scraperThrottleMre.WaitOne(TimeSpan.FromSeconds(RequestThrottler.ActiveUsers.Values.Count(x => x) * RequestThrottler.ThrottleFactor)));
 
             while (!dispose)
             {

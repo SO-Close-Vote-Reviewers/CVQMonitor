@@ -52,6 +52,11 @@ namespace SOCVRDotNet
             }
         }
 
+        /// <summary>
+        /// A number used to multiple the throttle duration.
+        /// </summary>
+        public static float ThrottleFactor { get; set; } = 1;
+
         //static RequestThrottler()
         //{
         //    Task.Run(() =>
