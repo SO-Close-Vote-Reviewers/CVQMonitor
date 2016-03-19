@@ -97,6 +97,7 @@ namespace SOCVRDotNet
                 while (reviews.Count < reviewCount)
                 {
                     if (throttler != null) throttler();
+
                     var reqUrl = $"http://stackoverflow.com/ajax/users/tab/{userID}?tab=activity&sort=reviews&page={page}";
                     var dom = CQ.CreateFromUrl(reqUrl);
 

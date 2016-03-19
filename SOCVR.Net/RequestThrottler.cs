@@ -16,10 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-using System;
 using System.Collections.Concurrent;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace SOCVRDotNet
 {
@@ -35,36 +32,8 @@ namespace SOCVRDotNet
         internal static ConcurrentDictionary<int, bool> ActiveUsers { get; set; } = new ConcurrentDictionary<int, bool>();
 
         /// <summary>
-        /// The maximum number of requests (per minutes) to be processed.
-        /// (Default: 60.)
-        /// </summary>
-        public static float RequestThroughputMin
-        {
-            get
-            {
-                return reqTp;
-            }
-            set
-            {
-                if (reqTp < 1) throw new ArgumentOutOfRangeException("value", "Must be a positive number.");
-
-                reqTp = value;
-            }
-        }
-
-        /// <summary>
         /// A number used to multiple the throttle duration.
         /// </summary>
         public static float ThrottleFactor { get; set; } = 1;
-
-        //static RequestThrottler()
-        //{
-        //    Task.Run(() =>
-        //    {
-        //        RequestsRemaining = RequestThroughputMin;
-
-        //        Thread.Sleep(60000); // 1 min.
-        //    });
-        //}
     }
 }

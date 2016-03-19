@@ -107,11 +107,19 @@ namespace SOCVRDotNet
         /// </summary>
         public int ID { get; private set; }
 
+
+
         /// <summary>
         /// Creates a new User object instance using a given profile Id.
         /// </summary>
-        /// <param name="userID">The profile id of the user. This is the same number as in the profile url.</param>
-        public User(int userID)
+        /// <param name="userID">
+        /// The profile id of the user. This is the same number as in the profile url.
+        /// </param>
+        /// <param name="async">
+        /// Specifies whether to initialise the object asynchronously (via a background thread),
+        /// or to block the calling thread whilst initialising.
+        /// </param>
+        public User(int userID, bool async = false)
         {
             isMod = IsModerator(userID);
             ID = userID;
@@ -134,6 +142,15 @@ namespace SOCVRDotNet
                 }
             };
 
+            if (async)
+            {
+                Task.Run(() => FetchTodaysReviews(true));
+            }
+            else
+            {
+                FetchTodaysReviews();
+            }
+
             Task.Run(() => ResetDailyData());
             Task.Run(() => ScrapeData());
         }
@@ -145,6 +162,8 @@ namespace SOCVRDotNet
         {
             Dispose();
         }
+
+
 
         /// <summary>
         /// Disposes all resources used by this instance.
@@ -192,6 +211,36 @@ namespace SOCVRDotNet
             }
         }
 
+
+
+        private void FetchTodaysReviews(bool async = false)
+        {
+            if (isMod) return;
+
+            RequestThrottler.ActiveUsers[ID] = true;
+
+            try
+            {
+                var throttle = new Action(ScraperThrottle);
+                var idsToFetch = GlobalCacher.ReviewLimit();
+                var ids = UserDataFetcher.GetLastestCVReviewIDs(fkey, ID, idsToFetch, throttle);
+
+                foreach (var id in ids)
+                {
+                    ProcessReview(id, throttle, true);
+                }
+
+                throttle();
+                CompletedReviewsCount = UserDataFetcher.FetchTodaysUserReviewCount(fkey, ID, ref evMan);
+            }
+            catch (Exception ex)
+            {
+                evMan.CallListeners(EventType.InternalException, ex);
+            }
+
+            RequestThrottler.ActiveUsers[ID] = false;
+        }
+
         private void ResetDailyData()
         {
             while (!dispose)
@@ -209,7 +258,7 @@ namespace SOCVRDotNet
 
         private void ScrapeData()
         {
-            var throttle = new Action(() => scraperThrottleMre.WaitOne(TimeSpan.FromSeconds(RequestThrottler.ActiveUsers.Values.Count(x => x) * RequestThrottler.ThrottleFactor)));
+            var throttle = new Action(ScraperThrottle);
 
             while (!dispose)
             {
@@ -244,7 +293,7 @@ namespace SOCVRDotNet
             }
         }
 
-        private void ProcessReview(int reviewID, Action throttle)
+        private void ProcessReview(int reviewID, Action throttle, bool calledFromInit = false)
         {
             // ID cache control.
             if (revIDCache.Contains(reviewID)) return;
@@ -255,19 +304,18 @@ namespace SOCVRDotNet
             var rev = new ReviewItem(reviewID, fkey);
             var revTime = rev.Results.Single(x => x.UserID == ID).Timestamp;
 
-            if (revTime.Date != DateTime.UtcNow.Date ||
-                (revStartTime > revTime &&
-                (revStartTime - revTime).TotalMinutes > 3))
-            {
-                return;
-            }
+            if (revTime.Date != DateTime.UtcNow.Date) return;
 
-            var avg = ((DateTime.UtcNow - rev.Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
-            DetectionLatency = TimeSpan.FromMilliseconds(avg);
+            // We only want "fresh" data.
+            if (!calledFromInit)
+            {
+                var avg = ((DateTime.UtcNow - rev.Results.Single(x => x.UserID == ID).Timestamp).TotalMilliseconds / 2) + (DetectionLatency.Milliseconds / 2);
+                DetectionLatency = TimeSpan.FromMilliseconds(avg);
+            }
 
             Reviews.Add(rev);
 
-            if (rev.AuditPassed != null)
+            if (rev.AuditPassed != null && !calledFromInit)
             {
                 var evType = rev.AuditPassed == true ?
                     EventType.AuditPassed :
@@ -284,6 +332,13 @@ namespace SOCVRDotNet
             reviewing = false;
             RequestThrottler.ActiveUsers[ID] = false;
             evMan.CallListeners(EventType.ReviewingCompleted, Reviews);
+        }
+
+        private void ScraperThrottle()
+        {
+            var secs = RequestThrottler.ActiveUsers.Values.Count(x => x) * RequestThrottler.ThrottleFactor;
+            var dur = TimeSpan.FromSeconds(Math.Max(secs, 0.5));
+            scraperThrottleMre.WaitOne(dur);
         }
     }
 }
