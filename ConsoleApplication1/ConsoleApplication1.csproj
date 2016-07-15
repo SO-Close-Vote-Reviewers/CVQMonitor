@@ -55,7 +55,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\SOCVR.NetFSharp\CVQMonitor.fsproj">
+    <ProjectReference Include="..\CVQMonitor\CVQMonitor.fsproj">
       <Project>{20035ac0-d3be-4926-9f9a-aa08091f2bdc}</Project>
       <Name>CVQMonitor</Name>
     </ProjectReference>

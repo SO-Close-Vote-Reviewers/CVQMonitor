@@ -5,7 +5,6 @@ open System.Collections.Generic
 open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
-open Jil
 open WebSocketSharp
 
 let mutable private socket = new WebSocket "ws://qa.sockets.stackexchange.com"
