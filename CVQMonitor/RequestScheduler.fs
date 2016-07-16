@@ -1,7 +1,8 @@
-﻿module  CVQMonitor.RequestScheduler
+﻿module CVQMonitor.RequestScheduler
 
 open System
 open System.Collections.Concurrent
+open System.Net
 open System.Threading
 open System.Threading.Tasks
 open RestSharp
@@ -57,21 +58,19 @@ let rec private sendRequest (req : RestRequest) attempt =
     let baseUrl = reqUri.Scheme + "://" + reqUri.Host
     let client = new RestClient (baseUrl)
     req.Resource <- reqUri.AbsolutePath.Remove (baseUrl.Length)
+    let mutable response = new RestResponse ()
     try
-        client.Execute(req) :?> RestResponse
+        response <- client.Execute(req) :?> RestResponse
     with
-    //TODO: Only retry if a WebException is found in the response's
-    // ErrorException property. Otherwise just return a new
-    // RestResponse and thrown in the caught exception into
-    // the ErrorException prop.
     | ex ->
-        if attempt >= 3 then
-            let e = new RestResponse ()
-            e.ErrorException <- ex
-            e
-        else
+        if response.ErrorException <> ex then
+            response.ErrorException <- ex
+    let responseCode = (int response.StatusCode).ToString ()
+    if responseCode.StartsWith "5" then
+        if attempt < 3 then
             wait 3
-            attempt + 1 |> sendRequest req 
+            response <- attempt + 1 |> sendRequest req
+    response
 
 let private processQueue () =
     while true do
