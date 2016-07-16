@@ -51,12 +51,14 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
+    <Compile Include="Json.fs" />
+    <Compile Include="RequestScheduler.fs" />
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="ReviewAction.fs" />
     <Compile Include="Review.fs" />
     <Compile Include="CVQActivityMonitor.fs" />
     <Compile Include="User.fs" />
     <Content Include="packages.config" />
-    <Compile Include="RequestScheduler.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />

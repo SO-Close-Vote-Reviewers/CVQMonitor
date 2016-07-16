@@ -9,7 +9,7 @@ open RestSharp
 let private requestQueue = new ConcurrentDictionary<int, RestRequest * (RestResponse -> unit)> ()
 let private queueProcessorMre = new ManualResetEvent false
 
-let mutable RequestsPerSecond = 30
+let mutable RequestsPerSecond = 90
 
 let internal ProcessRequest (req : RestRequest) =
     let waitMre = new ManualResetEvent false
@@ -60,12 +60,18 @@ let rec private sendRequest (req : RestRequest) attempt =
     try
         client.Execute(req) :?> RestResponse
     with
-        | _ as ex ->
-            if attempt >= 3 then
-                raise ex
-            else
-                wait 3
-                attempt + 1 |> sendRequest req 
+    //TODO: Only retry if a WebException is found in the response's
+    // ErrorException property. Otherwise just return a new
+    // RestResponse and thrown in the caught exception into
+    // the ErrorException prop.
+    | ex ->
+        if attempt >= 3 then
+            let e = new RestResponse ()
+            e.ErrorException <- ex
+            e
+        else
+            wait 3
+            attempt + 1 |> sendRequest req 
 
 let private processQueue () =
     while true do

@@ -15,6 +15,11 @@ namespace ConsoleApplication1
             //var url = "http://chat.stackoverflow.com/rooms/41570/so-close-vote-reviewers";
             //var req = new RestRequest(url, Method.GET);
             //var ere = RequestScheduler.ProcessRequest(req);
+            var client = new RestClient("http://sdgsdgfsd");
+            var req = new RestRequest("/dsgdsfgsdfg", Method.GET);
+
+            var erdgfs = client.Execute(req);
+
 
             var watcher = new User(2246344);
             watcher.NonAuditReviewed += (o, r) => Console.WriteLine($"Non-audit item reviewed: {r}");

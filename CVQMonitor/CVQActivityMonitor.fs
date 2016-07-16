@@ -18,24 +18,13 @@ let NonAuditReviewed = userEv.Publish
 [<CLIEvent>]
 let ExceptionRaised  = exEv.Publish
 
-let private getJsonField json name =
-    if String.IsNullOrWhiteSpace json then
-        ""
-    else
-        let ptn = "\"" + name + """"\s*?:\s*?(.*?)(}\Z|,")"""
-        let m = Regex.Match (json, ptn)
-        if m.Success then
-            m.Groups.[1].Value
-        else
-            ""
-
 let private handleMessage (msg : String) =
     lastMsg <- DateTime.UtcNow
-    let data = getJsonField msg "data"
+    let data = Json.GetField msg "data"
     if data <> "" then
         let dataEscaped = data.Replace ("\\\"", "\"")
-        let i = getJsonField dataEscaped "i"
-        let u = getJsonField dataEscaped "u"
+        let i = Json.GetField dataEscaped "i"
+        let u = Json.GetField dataEscaped "u"
         if i = "2" && u <> "" then
             let userID = Int32.Parse u
             userEv.Trigger userID
