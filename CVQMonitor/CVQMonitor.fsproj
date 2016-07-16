@@ -55,6 +55,8 @@
     <Compile Include="RequestScheduler.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ReviewAction.fs" />
+    <Compile Include="ReviewParser.fs" />
+    <Compile Include="FkeyCollector.fs" />
     <Compile Include="Review.fs" />
     <Compile Include="CVQActivityMonitor.fs" />
     <Compile Include="User.fs" />

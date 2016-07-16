@@ -13,7 +13,7 @@ type User (userID : int) =
     let HandleNonAuditReviewed () =
         if lastReviewTime.Date <> DateTime.UtcNow.Date then
             reviewingStartedEv.Trigger ()
-        let review = new Review 0
+        let review = new Review (0, userID)
         lastReviewTime <- review.Timestamp
         nonAuditReviewedEv.Trigger review
 

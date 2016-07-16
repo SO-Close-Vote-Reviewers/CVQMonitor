@@ -22,7 +22,7 @@ let private handleMessage (msg : String) =
     lastMsg <- DateTime.UtcNow
     let data = Json.GetField msg "data"
     if data <> "" then
-        let dataEscaped = data.Replace ("\\\"", "\"")
+        let dataEscaped = Json.EscapeData data
         let i = Json.GetField dataEscaped "i"
         let u = Json.GetField dataEscaped "u"
         if i = "2" && u <> "" then

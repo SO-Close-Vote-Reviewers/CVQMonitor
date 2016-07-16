@@ -1,3 +1,3 @@
 ﻿namespace CVQMonitor
 
-type ReviewAction = Close = 0 | LeaveOpen = 1
+type ReviewAction = Null = -1 | Close = 0 | LeaveOpen = 1
