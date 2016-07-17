@@ -19,16 +19,11 @@
         </dependencies>
         <frameworkAssemblies>
             <frameworkAssembly assemblyName="System" targetFramework=".NETFramework4.5" />
-            <frameworkAssembly assemblyName="System.Core" targetFramework=".NETFramework4.5" />
-            <frameworkAssembly assemblyName="Microsoft.CSharp" targetFramework=".NETFramework4.5" />
             <frameworkAssembly assemblyName="FSharp.Core" targetFramework=".NETFramework4.5" />
-            <frameworkAssembly assemblyName="System.Core" targetFramework=".NETFramework4.5" />
-            <frameworkAssembly assemblyName="System.Numerics" targetFramework=".NETFramework4.5" />
-            <frameworkAssembly assemblyName="System.Runtime.Serialization" targetFramework=".NETFramework4.5" />
         </frameworkAssemblies>
     </metadata>
     <files>
         <file src="..\CVQMonitor\bin\Release\CVQMonitor.dll" target="lib\CVQMonitor.dll" />
-        <file src="..\CVQMonitor\bin\Release\CVQMonitor.xml" target="lib\CVQMonitor.xml" />
+        <file src="..\CVQMonitor\bin\Release\CVQMonitor.XML" target="lib\CVQMonitor.xml" />
     </files>
 </package>
