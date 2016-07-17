@@ -13,7 +13,7 @@
         <summary>A .Net (4.5) library for fetching Stack Overflow user close vote review data. Previously known as SOCVR.Net.</summary>
         <dependencies>
             <group targetFramework=".NETFramework4.5">
-                <dependency id="ResrSharp" version="105.2.3" />
+                <dependency id="RestSharp" version="105.2.3" />
                 <dependency id="WebSocketSharp" version="1.0.3-rc11" />
             </group>
         </dependencies>
