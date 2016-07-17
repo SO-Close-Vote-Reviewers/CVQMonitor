@@ -6,7 +6,7 @@ platform: Any CPU
 
 assembly_info:
   patch: true
-  file: SOCVR.Net\Properties\AssemblyInfo.cs
+  file: CVQMonitor\Properties\AssemblyInfo.cs
   assembly_version: '3.4.0.1'
   assembly_file_version: '{version}'
   assembly_informational_version: '3.4.1-beta'
@@ -15,7 +15,7 @@ before_build:
 - nuget restore
 
 build:
-  project: SOCVR.Net.sln
+  project: CVQMonitor.sln
   parallel: true
   verbosity: minimal
 
@@ -23,11 +23,11 @@ after_build:
 - ps: .\NuGet\pack.ps1
 
 artifacts:
-- path: SOCVR.Net\bin\Release\SOCVR.Net.dll
-  name: SOCVR.Net.dll
-- path: SOCVR.Net\bin\Release\SOCVR.Net.xml
-  name: SOCVR.Net.xml
-- path: '**\SOCVR.Net*.nupkg'
+- path: CVQMonitor\bin\Release\CVQMonitor.dll
+  name: CVQMonitor.dll
+- path: CVQMonitor\bin\Release\CVQMonitor.xml
+  name: CVQMonitor.xml
+- path: '**\CVQMonitor*.nupkg'
   
 deploy:
 - provider: NuGet
