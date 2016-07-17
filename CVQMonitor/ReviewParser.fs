@@ -5,9 +5,9 @@ open System.Collections.Generic
 open System.Text.RegularExpressions
 
 let private regOpts = RegexOptions.Compiled ||| RegexOptions.CultureInvariant
-let private resultDataBasePtn = """(?is)<div\s*?class="review-results"\s*?>\s*?<a\s*?href="/users/$USERID$/.*?">(.*?)</a>.*?<span\s*?title="(.*?)".*?<b>([a-z\s]+)</b>\s*?</div>"""
+let private resultDataBasePtn = """(?is)<div\s+?class="review-results">\s*?<a\s+?href="/users/$USERID$/.+?">(.*?)</a>.*?<span\s+?title="(.*?)".*?<b>([a-z\s]+)</b>\s*?</div>"""
 let private auditPassedReg = new Regex ("""(?is)<strong>\s*?review audit (passed|failed)""", regOpts)
-let private tagsReg = new Regex ("""(?is)<div\s*?class="post-taglist">(\s*?<a\s*?href="/questions/tagged/\S+?".*?>(\S+?)</a>)+""", regOpts)
+let private tagsReg = new Regex ("""(?is)<div\s+?class="post-taglist">(\s*?<a\s+?href="/questions/tagged/\S+?".*?>(\S+?)</a>)+""", regOpts)
 
 let GetReviewResultData html userID =
     let ptn = resultDataBasePtn.Replace ("$USERID$", userID.ToString ())
@@ -22,6 +22,7 @@ let GetReviewResultData html userID =
             match m.Groups.[3].Value.ToLowerInvariant () with
             | "close" -> ReviewAction.Close
             | "leave open" -> ReviewAction.LeaveOpen
+            | "edit" -> ReviewAction.Edit
             | _ -> ReviewAction.Null
         (name, timestamp, action)
 

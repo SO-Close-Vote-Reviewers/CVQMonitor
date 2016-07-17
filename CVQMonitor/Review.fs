@@ -6,7 +6,6 @@ open RestSharp
 
 type Review (reviewID : int, reviewerID : int) =
     let reviewBaseUrl = "http://stackoverflow.com/review/next-task/"
-
     let mutable reviewerName = ""
     let mutable timestamp = DateTime.MinValue
     let mutable action = ReviewAction.Close
@@ -31,15 +30,9 @@ type Review (reviewID : int, reviewerID : int) =
         ()
 
     member this.ID = reviewID
-
     member this.ReviewerID = reviewerID
-
     member this.ReviewerName  = reviewerName
-
     member this.Timestamp = timestamp
-
     member this.Action = action
-
     member this.AuditPassed = auditPassed
-
     member this.Tags = tags

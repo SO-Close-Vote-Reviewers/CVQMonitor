@@ -57,7 +57,7 @@ let rec private sendRequest (req : RestRequest) attempt =
     let reqUri = new Uri (req.Resource)
     let baseUrl = reqUri.Scheme + "://" + reqUri.Host
     let client = new RestClient (baseUrl)
-    req.Resource <- reqUri.AbsolutePath
+    req.Resource <- reqUri.PathAndQuery
     let mutable response = new RestResponse ()
     try
         response <- client.Execute(req) :?> RestResponse
