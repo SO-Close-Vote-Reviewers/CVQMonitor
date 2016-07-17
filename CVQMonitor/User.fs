@@ -4,28 +4,28 @@ open System
 open System.Threading
 open System.Threading.Tasks
 
-type User (userID : int) =
+type User (userID : int) as this =
     //TODO: Ideally we should be fetching the review limit, not hardcoding it in.
     let reviewLimit = 40
     let mutable dispose = false
-    let mutable isReviewing = true//false
+    let mutable isReviewing = false
     let mutable lastReviewTime = DateTime.MinValue
     let mutable reviewCache : Review list = []
     let mutable trueReviewCount = 0
     let mutable isMod = false
     let itemReviewedEv = new Event<Review> ()
-    let reviewingStartedEv = new Event<unit> ()
-    let reviewingLimitReachedEv = new Event<unit> ()
+    let reviewingStartedEv = new Event<User> ()
+    let reviewingLimitReachedEv = new Event<User> ()
 
     let checkLimitReached () =
         if not isMod && (trueReviewCount >= reviewLimit || reviewCache.Length >= reviewLimit) then
-            reviewingLimitReachedEv.Trigger ()
+            reviewingLimitReachedEv.Trigger this
             isReviewing <- false
 
     let handleNonAuditReviewed () =
         isReviewing <- true
         if lastReviewTime.Date <> DateTime.UtcNow.Date then
-            reviewingStartedEv.Trigger ()
+            reviewingStartedEv.Trigger this
         let revsToCheck =
             UserProfileScraper.GetReviewsByPage userID 1
             |> Seq.filter (fun x ->
