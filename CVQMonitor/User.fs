@@ -13,7 +13,7 @@ type User (userID : int) as this =
     let mutable reviewCache : Review list = []
     let mutable trueReviewCount = 0
     let mutable isMod = false
-    let itemReviewedEv = new Event<Review> ()
+    let itemReviewedEv = new Event<User * Review> ()
     let reviewingStartedEv = new Event<User> ()
     let reviewingLimitReachedEv = new Event<User> ()
 
@@ -38,7 +38,7 @@ type User (userID : int) as this =
         for rev in revsToCheck do
             let review = new Review (fst rev, userID)
             reviewCache <- review :: reviewCache
-            itemReviewedEv.Trigger review
+            itemReviewedEv.Trigger (this, review)
             if review.Timestamp > lastReviewTime then
                 lastReviewTime <- review.Timestamp
         checkLimitReached ()
