@@ -10,7 +10,7 @@ open RestSharp
 let private requestQueue = new ConcurrentDictionary<int, RestRequest * (RestResponse -> unit)> ()
 let private queueProcessorMre = new ManualResetEvent false
 
-let mutable RequestsPerSecond = 90
+let mutable RequestsPerSecond = 90.0
 
 let internal ProcessRequest (req : RestRequest) =
     let waitMre = new ManualResetEvent false
@@ -31,8 +31,10 @@ let internal ProcessRequest (req : RestRequest) =
     response
 
 let private wait multiplier = 
-    60 / RequestsPerSecond * 1000
+    (60.0 / RequestsPerSecond) * 1000.0
     |> (*) multiplier
+    |> Math.Round
+    |> int
     |> queueProcessorMre.WaitOne
     |> ignore
 
@@ -68,13 +70,13 @@ let rec private sendRequest (req : RestRequest) attempt =
     let responseCode = (int response.StatusCode).ToString ()
     if responseCode.StartsWith "5" then
         if attempt < 3 then
-            wait 3
+            wait 3.0
             response <- attempt + 1 |> sendRequest req
     response
 
 let private processQueue () =
     while true do
-        wait 1
+        wait 1.0
         if not requestQueue.IsEmpty then
             let kv = getNextQueuedItem ()
             let req = snd kv |> fst
