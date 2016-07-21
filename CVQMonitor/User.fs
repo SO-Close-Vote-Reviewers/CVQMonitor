@@ -52,6 +52,14 @@ type User (userID : int) as this =
                     isReviewing <- false
                 checkLimitReached ()
 
+    let dailyReset () =
+        while not dispose do
+            let wait = 24.0 - DateTime.UtcNow.TimeOfDay.TotalHours
+            TimeSpan.FromHours wait |> Thread.Sleep
+            reviewCache <- []
+            trueReviewCount <- 0
+            isReviewing <- false
+
     do
         isMod <- UserProfileScraper.IsModerator userID
         let revsToday = UserProfileScraper.GetCloseVoteReviewsToday userID
@@ -60,6 +68,7 @@ type User (userID : int) as this =
             reviewCache <- review :: reviewCache
         CVQActivityMonitor.NonAuditReviewed.Add (fun id -> if id = userID then handleNonAuditReviewed ())
         Task.Run reviewCountUpdater |> ignore
+        Task.Run dailyReset |> ignore
 
     [<CLIEvent>]
     member this.ItemReviewed = itemReviewedEv.Publish
