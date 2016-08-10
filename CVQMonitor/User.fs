@@ -10,30 +10,12 @@ type User (userID : int) as this =
     let itemReviewedEv = new Event<User * Review> ()
     let reviewingStartedEv = new Event<User> ()
     let reviewingLimitReachedEv = new Event<User> ()
-    let _revStartedEv = new Event<unit> ()
-    let _revStarted = _revStartedEv.Publish
     let mutable dispose = false
     let mutable isReviewing = false
     let mutable lastReviewTime = DateTime.MinValue
     let mutable reviewCache : Review list = []
     let mutable trueReviewCount = 0
     let mutable isMod = false
-
-    let calculateSelectiveAvgSecs () : float =
-        match reviewCache.Length with
-        | x when x = 0 || x = 1 -> 15.0
-        | _ ->
-            let mutable avg = 0.0
-            for i in 0 .. reviewCache.Length - 2 do
-                let diff =
-                    reviewCache.[i].Timestamp
-                    |> (-) reviewCache.[i + 1].Timestamp
-                let diffSecs = diff.TotalSeconds
-                avg <-
-                    match diffSecs with
-                    | x when x > 180.0 -> avg
-                    | _ -> (avg + diffSecs) / 2.0
-            avg
 
     let checkLimitReached () =
         if not isMod && isReviewing && (trueReviewCount >= reviewLimit || reviewCache.Length >= reviewLimit) then
@@ -58,20 +40,12 @@ type User (userID : int) as this =
                 lastReviewTime <- review.Timestamp
         checkLimitReached ()
 
-    let checkForAudits () =
-        while isReviewing && not dispose do
-            let mutable wait =
-                let secs =  calculateSelectiveAvgSecs () / 3.0 * 2.0
-                let safeSecs = Math.Max (Math.Min (secs, 60.0), 15.0)
-                TimeSpan.FromSeconds safeSecs
-            Thread.Sleep wait
-            handleNonAuditReviewed ()
-
     let reviewCountUpdater () =
         while not dispose do
             Thread.Sleep 15000
             if isReviewing then
                 trueReviewCount <- UserProfileScraper.GetTodayReviewCount userID
+                handleNonAuditReviewed ()
                 checkLimitReached ()
                 if DateTime.UtcNow - lastReviewTime > TimeSpan.FromMinutes 3.0 then
                     isReviewing <- false
@@ -95,10 +69,8 @@ type User (userID : int) as this =
                 isReviewing <- true
                 if lastReviewTime.Date <> DateTime.UtcNow.Date then
                     reviewingStartedEv.Trigger this
-                handleNonAuditReviewed ()
-                _revStartedEv.Trigger ()
+                Task.Run handleNonAuditReviewed |> ignore
         )
-        _revStarted.Add (fun () -> checkForAudits ())
         Task.Run reviewCountUpdater |> ignore
         Task.Run dailyReset |> ignore
 
