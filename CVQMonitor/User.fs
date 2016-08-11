@@ -17,12 +17,15 @@ type User (userID : int) as this =
     let mutable trueReviewCount = 0
     let mutable isMod = false
 
+    let updateTrueReviewCount () =
+        trueReviewCount <- UserProfileScraper.GetTodayReviewCount userID
+
     let checkLimitReached () =
         if not isMod && isReviewing && (trueReviewCount >= reviewLimit || reviewCache.Length >= reviewLimit) then
             isReviewing <- false
             reviewingLimitReachedEv.Trigger this
 
-    let handleNonAuditReviewed () =
+    let addNewReviews () =
         let revsToCheck =
             UserProfileScraper.GetReviewsByPage userID 1
             |> Seq.filter (fun x ->
@@ -38,16 +41,15 @@ type User (userID : int) as this =
             itemReviewedEv.Trigger (this, review)
             if review.Timestamp > lastReviewTime then
                 lastReviewTime <- review.Timestamp
-        checkLimitReached ()
 
-    let reviewCountUpdater () =
+    let reviewPoller () =
         while not dispose do
             Thread.Sleep 15000
             if isReviewing then
-                trueReviewCount <- UserProfileScraper.GetTodayReviewCount userID
-                handleNonAuditReviewed ()
+                addNewReviews ()
+                updateTrueReviewCount ()
                 checkLimitReached ()
-                if DateTime.UtcNow - lastReviewTime > TimeSpan.FromMinutes 3.0 then
+                if DateTime.UtcNow - lastReviewTime > TimeSpan.FromMinutes 2.5 then
                     isReviewing <- false
 
     let dailyReset () =
@@ -69,9 +71,10 @@ type User (userID : int) as this =
                 isReviewing <- true
                 if lastReviewTime.Date <> DateTime.UtcNow.Date then
                     reviewingStartedEv.Trigger this
-                Task.Run handleNonAuditReviewed |> ignore
+                    updateTrueReviewCount ()
+                    checkLimitReached ()
         )
-        Task.Run reviewCountUpdater |> ignore
+        Task.Run reviewPoller |> ignore
         Task.Run dailyReset |> ignore
 
     [<CLIEvent>]

@@ -1,4 +1,4 @@
-version: 4.0.{build}.7
+version: 4.0.{build}.8
 
 configuration: Release
 
@@ -7,9 +7,9 @@ platform: Any CPU
 assembly_info:
   patch: true
   file: CVQMonitor\AssemblyInfo.fs
-  assembly_version: '4.0.0.7'
+  assembly_version: '4.0.0.8'
   assembly_file_version: '{version}'
-  assembly_informational_version: '4.0.7-beta'
+  assembly_informational_version: '4.0.8beta'
 
 before_build:
 - nuget restore
