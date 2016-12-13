@@ -16,23 +16,23 @@ let private reviewCountReg = new Regex ("""today\s+?(\d+)""", regOpts)
 
 let GetReviewsByPage (userID : int) (pageNo : int) =
     let mutable url = baseReviewHistoryTabUrl
-    url <- url.Replace ("$USERID$", userID.ToString ())
-    url <- url.Replace ("$PAGENO$", pageNo.ToString ())
-    let req = new RestRequest (url, Method.GET)
+    url <- url.Replace("$USERID$", userID.ToString())
+    url <- url.Replace("$PAGENO$", pageNo.ToString())
+    let req = new RestRequest(url, Method.GET)
     let res = RequestScheduler.ProcessRequest req
-    let revs = new List<int * DateTime> ()
+    let revs = List<int * DateTime>()
     if String.IsNullOrWhiteSpace res.Content |> not then
         let reviewItems = reviewItemReg.Matches res.Content
         for revItem in reviewItems do
             let closeRevID = reviewIDReg.Match revItem.Value
             let revTime = timestampReg.Match revItem.Value
             let id = if closeRevID.Success then Int32.Parse closeRevID.Groups.[1].Value else -1
-            let time = (DateTime.Parse revTime.Groups.[2].Value).ToUniversalTime ()
-            revs.Add (id, time)
+            let time = (DateTime.Parse revTime.Groups.[2].Value).ToUniversalTime()
+            revs.Add(id, time)
     revs
 
 let GetCloseVoteReviewsToday (userID : int) =
-    let revs = new List<int * DateTime> ()
+    let revs = new List<int * DateTime>()
     let mutable reviewsToday = true
     let mutable currentPage = 1
     while reviewsToday do
@@ -46,8 +46,8 @@ let GetCloseVoteReviewsToday (userID : int) =
     revs
 
 let GetTodayReviewCount userID =
-    let url = baseReviewCountUrl.Replace ("$USERID$", userID.ToString ())
-    let req = new RestRequest (url, Method.GET)
+    let url = baseReviewCountUrl.Replace("$USERID$", userID.ToString ())
+    let req = new RestRequest(url, Method.GET)
     let res = RequestScheduler.ProcessRequest req
     if String.IsNullOrWhiteSpace res.Content then
         0
@@ -56,8 +56,8 @@ let GetTodayReviewCount userID =
         Int32.Parse m.Groups.[1].Value
 
 let IsModerator userID =
-    let url = baseUserProfileUrl.Replace ("$USERID$", userID.ToString ())
-    let req = new RestRequest (url, Method.GET)
+    let url = baseUserProfileUrl.Replace("$USERID$", userID.ToString ())
+    let req = new RestRequest(url, Method.GET)
     let res = RequestScheduler.ProcessRequest req
     if String.IsNullOrWhiteSpace res.Content then
         false
