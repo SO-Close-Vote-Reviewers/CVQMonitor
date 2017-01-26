@@ -10,7 +10,7 @@ type User (userID : int) as this =
     let reviewLimit = 40
     let itemReviewedEv = new Event<User * Review>()
     let reviewingStartedEv = new Event<User>()
-    let reviewingLimitReachedEv = new Event<User>()
+    let reviewLimitReachedEv = new Event<User>()
     let reviewCache = HashSet<Review>()
     let mutable dispose = false
     let mutable isReviewing = false
@@ -22,9 +22,9 @@ type User (userID : int) as this =
         trueReviewCount <- UserProfileScraper.GetTodayReviewCount userID
 
     let checkLimitReached() =
-        if not isMod && isReviewing && (trueReviewCount >= reviewLimit || reviewCache.Count >= reviewLimit) then
+        if not isMod && isReviewing && this.TrueReviewCount >= reviewLimit then
             isReviewing <- false
-            reviewingLimitReachedEv.Trigger this
+            reviewLimitReachedEv.Trigger this
 
     let addNewReviews() =
         let revsToCheck =
@@ -50,9 +50,12 @@ type User (userID : int) as this =
                 addNewReviews()
                 updateTrueReviewCount()
                 checkLimitReached()
-                if DateTime.UtcNow - lastReviewTime > TimeSpan.FromMinutes 3.0 then
-                    isReviewing <- false
-                Thread.Sleep 10000
+                if DateTime.UtcNow - lastReviewTime < TimeSpan.FromMinutes 3.0 then
+                    // Sleep just 10 secs if they're active.
+                    Thread.Sleep 10000
+                else
+                    // Otherwise, check every 2 mins.
+                    Thread.Sleep(1000 * 60 * 2)
 
     do
         isMod <- UserProfileScraper.IsModerator userID
@@ -64,9 +67,9 @@ type User (userID : int) as this =
             if id = userID then
                 isReviewing <- true
                 if lastReviewTime.Date <> DateTime.UtcNow.Date then
-                    reviewingStartedEv.Trigger this
                     reviewCache.Clear() |> ignore
                     trueReviewCount <- 0
+                    reviewingStartedEv.Trigger this
         )
         Task.Run reviewPoller |> ignore
 
@@ -77,7 +80,7 @@ type User (userID : int) as this =
     member this.ReviewingStarted = reviewingStartedEv.Publish
 
     [<CLIEvent>]
-    member this.ReviewingLimitReached = reviewingLimitReachedEv.Publish
+    member this.ReviewLimitReached = reviewLimitReachedEv.Publish
 
     member this.ID = userID
 
