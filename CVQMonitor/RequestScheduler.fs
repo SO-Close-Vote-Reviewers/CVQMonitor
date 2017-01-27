@@ -10,7 +10,7 @@ open RestSharp
 let private requestQueue = new ConcurrentDictionary<int, RestRequest * (RestResponse -> unit)> ()
 let private queueProcessorMre = new ManualResetEvent false
 
-let mutable RequestsPerMinute = 90.0
+let mutable RequestsPerMinute = 60.0
 
 let internal ProcessRequest (req : RestRequest) =
     let waitMre = new ManualResetEvent false

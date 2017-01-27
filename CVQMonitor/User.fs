@@ -50,7 +50,7 @@ type User (userID : int) as this =
                 addNewReviews()
                 updateTrueReviewCount()
                 checkLimitReached()
-                if DateTime.UtcNow - lastReviewTime < TimeSpan.FromMinutes 3.0 then
+                if (DateTime.UtcNow - lastReviewTime).TotalMinutes < 3.0 then
                     // Sleep just 10 secs if they're active.
                     Thread.Sleep 10000
                 else
