@@ -63,8 +63,8 @@ type User (userID : int) as this =
 
     do
         isMod <- UserProfileScraper.IsModerator userID
-        let revsToday = UserProfileScraper.GetCloseVoteReviewsToday userID
-        for rev in revsToday do
+        let revs = UserProfileScraper.GetReviewsByPage userID 1
+        for rev in revs do
             let review = new Review(fst rev, userID)
             reviewCache.Enqueue(review)
         CVQActivityMonitor.NonAuditReviewed.Add (fun id ->
@@ -89,6 +89,8 @@ type User (userID : int) as this =
 
     member this.IsMod = isMod
 
+    member this.TrueReviewCount = reviewsToday
+
     member this.ReviewsToday =
         let x =
             reviewCache
@@ -96,8 +98,6 @@ type User (userID : int) as this =
                 r.Timestamp.Date = DateTime.UtcNow.Date
             )
         List<Review>(x)
-
-    member this.TrueReviewCount = reviewsToday
 
     interface IDisposable with
         member this.Dispose () =

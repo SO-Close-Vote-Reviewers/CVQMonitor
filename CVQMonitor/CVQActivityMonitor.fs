@@ -41,7 +41,7 @@ let initSocket () =
 let socketRecovery () =
     while true do
         Thread.Sleep 1000
-        if DateTime.UtcNow - lastMsg > TimeSpan.FromMinutes 5.0 then
+        if DateTime.UtcNow - lastMsg > TimeSpan.FromSeconds 30.0 then
             initSocket ()
             lastMsg <- DateTime.MaxValue
 
