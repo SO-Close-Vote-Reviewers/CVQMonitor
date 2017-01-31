@@ -11,64 +11,67 @@ type User (userID : int) as this =
     let itemReviewedEv = new Event<User * Review>()
     let reviewingStartedEv = new Event<User>()
     let reviewLimitReachedEv = new Event<User>()
-    let reviewCache = HashSet<Review>()
+    let reviewCache = Queue<Review>()
     let mutable dispose = false
     let mutable isReviewing = false
     let mutable lastReviewTime = DateTime.MinValue
-    let mutable trueReviewCount = 0
+    let mutable reviewsToday = 0
     let mutable isMod = false
 
-    let updateTrueReviewCount() =
-        trueReviewCount <- UserProfileScraper.GetTodayReviewCount userID
+    let updateReviewsToday() =
+        reviewsToday <- UserProfileScraper.GetTodayReviewCount userID
 
     let checkLimitReached() =
-        if not isMod && isReviewing && this.TrueReviewCount >= reviewLimit then
+        if not isMod && isReviewing && reviewsToday >= reviewLimit then
             isReviewing <- false
             reviewLimitReachedEv.Trigger this
 
+    // Scrapes a user's profile for new reviews, adding any 
+    // to the reviewCache and calling the ItemReviewed event.
     let addNewReviews() =
         let revsToCheck =
             UserProfileScraper.GetReviewsByPage userID 1
             |> Seq.filter (fun x ->
                 fst x > 0 &&
-                (snd x).Date = DateTime.UtcNow.Date &&
                 reviewCache
                 |> Seq.exists (fun z -> z.ID = fst x)
                 |> not
             )
         for rev in revsToCheck do
             let review = new Review(fst rev, userID)
-            reviewCache.Add(review) |> ignore
             itemReviewedEv.Trigger(this, review)
+            reviewCache.Enqueue(review)
+            if reviewCache.Count > 40 then
+                reviewCache.Dequeue() |> ignore
             if review.Timestamp > lastReviewTime then
                 lastReviewTime <- review.Timestamp
 
+    // Periodically scans a user's profile for new reviews.
     let reviewPoller() =
         while not dispose do
             Thread.Sleep 500
             if isReviewing then
                 addNewReviews()
-                updateTrueReviewCount()
+                updateReviewsToday()
                 checkLimitReached()
                 if (DateTime.UtcNow - lastReviewTime).TotalMinutes < 3.0 then
-                    // Sleep just 10 secs if they're active.
-                    Thread.Sleep 10000
+                    // Sleep just 20 secs if they're active.
+                    Thread.Sleep(1000 * 20)
                 else
-                    // Otherwise, check every 2 mins.
-                    Thread.Sleep(1000 * 60 * 2)
+                    // Otherwise, check every 5 mins.
+                    Thread.Sleep(1000 * 60 * 5)
 
     do
         isMod <- UserProfileScraper.IsModerator userID
         let revsToday = UserProfileScraper.GetCloseVoteReviewsToday userID
         for rev in revsToday do
             let review = new Review(fst rev, userID)
-            reviewCache.Add(review) |> ignore
+            reviewCache.Enqueue(review)
         CVQActivityMonitor.NonAuditReviewed.Add (fun id ->
             if id = userID then
                 isReviewing <- true
                 if lastReviewTime.Date <> DateTime.UtcNow.Date then
-                    reviewCache.Clear() |> ignore
-                    trueReviewCount <- 0
+                    reviewsToday <- 0
                     reviewingStartedEv.Trigger this
         )
         Task.Run reviewPoller |> ignore
@@ -86,9 +89,15 @@ type User (userID : int) as this =
 
     member this.IsMod = isMod
 
-    member this.ReviewsToday = reviewCache
+    member this.ReviewsToday =
+        let x =
+            reviewCache
+            |> Seq.filter (fun r ->
+                r.Timestamp.Date = DateTime.UtcNow.Date
+            )
+        List<Review>(x)
 
-    member this.TrueReviewCount = Math.Max(trueReviewCount, reviewCache.Count)
+    member this.TrueReviewCount = reviewsToday
 
     interface IDisposable with
         member this.Dispose () =
