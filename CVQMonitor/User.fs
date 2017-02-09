@@ -71,6 +71,7 @@ type User (userID : int) as this =
             if id = userID then
                 isReviewing <- true
                 if lastReviewTime.Date <> DateTime.UtcNow.Date then
+                    lastReviewTime <- DateTime.UtcNow.Date
                     reviewsToday <- 0
                     reviewingStartedEv.Trigger this
         )
