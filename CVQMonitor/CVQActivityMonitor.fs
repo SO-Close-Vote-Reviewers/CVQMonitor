@@ -2,21 +2,20 @@
 
 open System
 open System.Collections.Generic
+open System.Text
 open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
-open WebSocketSharp
+open System.Net.WebSockets
 
-let mutable private socket = new WebSocket "ws://qa.sockets.stackexchange.com"
+let mutable private socket = new ClientWebSocket()
 let mutable private lastMsg = DateTime.MaxValue
-let private userEv = new Event<int> ()
-let private exEv = new Event<Exception> ()
+let private endpoint = Uri "ws://qa.sockets.stackexchange.com"
+let private sendMsg = ArraySegment<byte>(Encoding.UTF8.GetBytes "1-review-dashboard-update")
+let private userEv = new Event<int>()
 
 [<CLIEvent>]
 let NonAuditReviewed = userEv.Publish
-
-[<CLIEvent>]
-let ExceptionRaised  = exEv.Publish
 
 let private handleMessage (msg : String) =
     lastMsg <- DateTime.UtcNow
@@ -29,16 +28,31 @@ let private handleMessage (msg : String) =
             let userID = Int32.Parse u
             userEv.Trigger userID
 
-let initSocket () = 
-    if socket.ReadyState = WebSocketState.Open then
-        socket.Close ()
-    socket <- new WebSocket "ws://qa.sockets.stackexchange.com"
-    socket.OnOpen.Add (fun e -> socket.Send "1-review-dashboard-update")
-    socket.OnMessage.Add (fun e -> handleMessage e.Data)
-    socket.OnError.Add (fun e -> exEv.Trigger e.Exception)
-    socket.Connect ()
+let initSocket() = 
+    if socket.State = WebSocketState.Open then
+        socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
+    socket <- new ClientWebSocket()
+    socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
+    socket.SendAsync(sendMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
 
-let socketRecovery () =
+let listenerLoop() =
+    while true do
+        let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
+        let responseResult =
+            socket.ReceiveAsync(bf, CancellationToken.None)
+            |> Async.AwaitTask
+            |> Async.RunSynchronously
+        match responseResult with
+        | _ as r when r.Count > 0 ->
+            let msgChars =
+                Encoding.UTF8.GetString(bf.Array)
+                |> Seq.filter (fun c -> int c <> 0)
+                |> Array.ofSeq
+            let msg = new string(msgChars)
+            handleMessage(msg)
+        | _ -> ()
+
+let socketRecovery() =
     while true do
         Thread.Sleep 1000
         if DateTime.UtcNow - lastMsg > TimeSpan.FromSeconds 30.0 then
@@ -46,5 +60,6 @@ let socketRecovery () =
             lastMsg <- DateTime.MaxValue
 
 do
-    initSocket ()
+    initSocket()
     Task.Run socketRecovery |> ignore
+    Task.Run listenerLoop |> ignore

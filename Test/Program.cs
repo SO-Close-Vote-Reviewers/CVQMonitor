@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading.Tasks;
+using CVQMonitor;
 
 namespace Test
 {
@@ -12,7 +13,14 @@ namespace Test
     {
         static void Main(string[] args)
         {
-            Test().Wait();
+            var t = new User(2246344);
+
+            while (true)
+
+            {
+                System.Threading.Thread.Sleep(100);
+            }
+            //Test().Wait();
         }
 
         private static async Task Test()
