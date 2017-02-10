@@ -10,56 +10,69 @@ open System.Net.WebSockets
 
 let mutable private socket = new ClientWebSocket()
 let mutable private lastMsg = DateTime.MaxValue
+let mutable private cancelTknSrc = new CancellationTokenSource()
 let private endpoint = Uri "ws://qa.sockets.stackexchange.com"
-let private sendMsg = ArraySegment<byte>(Encoding.UTF8.GetBytes "1-review-dashboard-update")
+let private onOpenMsg = ArraySegment<byte>(Encoding.UTF8.GetBytes "1-review-dashboard-update")
+let private pongMsg = ArraySegment<byte>(Encoding.UTF8.GetBytes """{"action":"hb","data":"hb"}""")
 let private userEv = new Event<int>()
 
 [<CLIEvent>]
 let NonAuditReviewed = userEv.Publish
 
 let private handleMessage (msg : String) =
+
+    Console.WriteLine(msg);
+
     lastMsg <- DateTime.UtcNow
     let data = Json.GetField msg "data"
-    if data <> "" then
+    match data with
+    | "hb" -> socket.SendAsync(pongMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
+    | _ as d when d <> "" ->
         let dataEscaped = Json.EscapeData data
         let i = Json.GetField dataEscaped "i"
         let u = Json.GetField dataEscaped "u"
         if i = "2" && u <> "" then
             let userID = Int32.Parse u
             userEv.Trigger userID
+    | _ -> ()
 
-let initSocket() = 
+let listenerLoop() =
+    while socket.State = WebSocketState.Open do
+        try
+            let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
+            let responseResult =
+                socket.ReceiveAsync(bf, cancelTknSrc.Token)
+                |> Async.AwaitTask
+                |> Async.RunSynchronously
+            match responseResult with
+            | _ as r when r.Count > 0 ->
+                let msgChars =
+                    Encoding.UTF8.GetString(bf.Array)
+                    |> Seq.filter (fun c -> int c <> 0)
+                    |> Array.ofSeq
+                let msg = new string(msgChars)
+                handleMessage(msg)
+            | _ -> ()
+        with
+        | _ as e -> Console.WriteLine(e)
+
+let initSocket() =
+    cancelTknSrc.Cancel()
     if socket.State = WebSocketState.Open then
         socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
     socket <- new ClientWebSocket()
     socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
-    socket.SendAsync(sendMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
-
-let listenerLoop() =
-    while true do
-        let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
-        let responseResult =
-            socket.ReceiveAsync(bf, CancellationToken.None)
-            |> Async.AwaitTask
-            |> Async.RunSynchronously
-        match responseResult with
-        | _ as r when r.Count > 0 ->
-            let msgChars =
-                Encoding.UTF8.GetString(bf.Array)
-                |> Seq.filter (fun c -> int c <> 0)
-                |> Array.ofSeq
-            let msg = new string(msgChars)
-            handleMessage(msg)
-        | _ -> ()
+    socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
+    cancelTknSrc <- new CancellationTokenSource()
+    Task.Run listenerLoop |> ignore
 
 let socketRecovery() =
     while true do
         Thread.Sleep 1000
         if DateTime.UtcNow - lastMsg > TimeSpan.FromSeconds 30.0 then
-            initSocket ()
+            initSocket()
             lastMsg <- DateTime.MaxValue
 
 do
     initSocket()
     Task.Run socketRecovery |> ignore
-    Task.Run listenerLoop |> ignore
