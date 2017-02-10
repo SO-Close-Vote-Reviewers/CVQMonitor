@@ -51,7 +51,9 @@ let listenerLoop() =
                 handleMessage(msg)
             | _ -> ()
         with
-        | _ as e -> Console.WriteLine(e)
+        | _ as e ->
+            Console.WriteLine(e)
+            Thread.Sleep(5000)
 
 let initSocket() =
     if socket.State = WebSocketState.Open then
