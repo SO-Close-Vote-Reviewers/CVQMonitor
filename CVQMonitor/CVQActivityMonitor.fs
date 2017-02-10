@@ -20,9 +20,6 @@ let private userEv = new Event<int>()
 let NonAuditReviewed = userEv.Publish
 
 let private handleMessage (msg : String) =
-
-    Console.WriteLine(msg);
-
     lastMsg <- DateTime.UtcNow
     let data = Json.GetField msg "data"
     match data with
