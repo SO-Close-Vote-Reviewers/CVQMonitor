@@ -6,6 +6,7 @@ open System.Text
 open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
+open System.Net.Sockets
 open System.Net.WebSockets
 
 let mutable private socket = new ClientWebSocket()
@@ -51,16 +52,19 @@ let listenerLoop() =
                 handleMessage(msg)
             | _ -> ()
         with
+        | _ as e when e.InnerException = null |> not && e.InnerException.InnerException = null |> not && e.InnerException.InnerException :? SocketException && (e.InnerException.InnerException :?> SocketException).ErrorCode = 10053 -> ()
+        | :? OperationCanceledException -> ()
         | _ as e ->
             Console.WriteLine(e)
             Thread.Sleep(5000)
 
 let initSocket() =
     if socket.State = WebSocketState.Open then
-        socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
         cts.Cancel()
         cts.Dispose()
         cts <- new CancellationTokenSource()
+        socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
+        socket.Dispose()
         socket <- new ClientWebSocket()
     socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
     socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
