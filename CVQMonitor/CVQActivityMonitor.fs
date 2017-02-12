@@ -35,8 +35,8 @@ let private handleMessage (msg : String) =
     | _ -> ()
 
 let listenerLoop() =
-    while socket.State = WebSocketState.Open do
-        try
+    try
+        while socket.State = WebSocketState.Open do
             let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
             let responseResult =
                 socket.ReceiveAsync(bf, cts.Token)
@@ -51,12 +51,12 @@ let listenerLoop() =
                 let msg = new string(msgChars)
                 handleMessage(msg)
             | _ -> ()
-        with
-        | _ as e when e.InnerException = null |> not && e.InnerException.InnerException = null |> not && e.InnerException.InnerException :? SocketException && (e.InnerException.InnerException :?> SocketException).ErrorCode = 10053 -> ()
-        | :? OperationCanceledException -> ()
-        | _ as e ->
-            Console.WriteLine(e)
-            Thread.Sleep(5000)
+    with
+    | _ as e when e.InnerException = null |> not && e.InnerException.InnerException = null |> not && e.InnerException.InnerException :? SocketException && (e.InnerException.InnerException :?> SocketException).ErrorCode = 10053 -> ()
+    | :? OperationCanceledException -> ()
+    | _ as e ->
+        Console.WriteLine(e)
+        Thread.Sleep(5000)
 
 let initSocket() =
     try
@@ -71,7 +71,6 @@ let initSocket() =
         socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
     with
     | _ as e -> Console.WriteLine(e)
-
     Task.Run listenerLoop |> ignore
 
 let socketRecovery() =
