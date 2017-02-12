@@ -25,10 +25,11 @@ let GetReviewsByPage (userID : int) (pageNo : int) =
         let reviewItems = reviewItemReg.Matches res.Content
         for revItem in reviewItems do
             let closeRevID = reviewIDReg.Match revItem.Value
-            let revTime = timestampReg.Match revItem.Value
-            let id = if closeRevID.Success then Int32.Parse closeRevID.Groups.[1].Value else -1
-            let time = (DateTime.Parse revTime.Groups.[2].Value).ToUniversalTime()
-            revs.Add(id, time)
+            if closeRevID.Success then
+                let id = Int32.Parse closeRevID.Groups.[1].Value
+                let revTime = timestampReg.Match revItem.Value
+                let time = (DateTime.Parse revTime.Groups.[2].Value).ToUniversalTime()
+                revs.Add(id, time)
     revs
 
 let GetCloseVoteReviewsToday (userID : int) =

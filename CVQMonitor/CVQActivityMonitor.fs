@@ -59,15 +59,19 @@ let listenerLoop() =
             Thread.Sleep(5000)
 
 let initSocket() =
-    if socket.State = WebSocketState.Open then
+    try
         cts.Cancel()
         cts.Dispose()
         cts <- new CancellationTokenSource()
-        socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
-        socket.Dispose()
+        if socket.State = WebSocketState.Open then
+            socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
+            socket.Dispose()
         socket <- new ClientWebSocket()
-    socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
-    socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
+        socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
+        socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
+    with
+    | _ as e -> Console.WriteLine(e)
+
     Task.Run listenerLoop |> ignore
 
 let socketRecovery() =
