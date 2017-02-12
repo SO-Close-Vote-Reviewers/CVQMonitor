@@ -10,7 +10,6 @@ open System.Net.Sockets
 open System.Net.WebSockets
 
 let mutable private lastMsg = DateTime.MaxValue
-//let mutable private cts = new CancellationTokenSource()
 let private endpoint = Uri "ws://qa.sockets.stackexchange.com"
 let private onOpenMsg = ArraySegment<byte>(Encoding.UTF8.GetBytes "1-review-dashboard-update")
 let private pongMsg = ArraySegment<byte>(Encoding.UTF8.GetBytes """{"action":"hb","data":"hb"}""")
@@ -43,7 +42,7 @@ let listenerLoop() =
             while socket.State = WebSocketState.Open do
                 let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
                 let responseResult =
-                    socket.ReceiveAsync(bf, CancellationToken.None(*cts.Token*))
+                    socket.ReceiveAsync(bf, CancellationToken.None)
                     |> Async.AwaitTask
                     |> Async.RunSynchronously
                 let sendPong =
@@ -65,29 +64,5 @@ let listenerLoop() =
             Console.WriteLine(e)
         Thread.Sleep 5000
 
-//let initSocket() =
-//    try
-//        cts.Cancel()
-//        cts.Dispose()
-//        cts <- new CancellationTokenSource()
-//        if socket.State = WebSocketState.Open then
-//            socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None).Wait()
-//            socket.Dispose()
-//        socket <- new ClientWebSocket()
-//        socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
-//        socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
-//    with
-//    | _ as e -> Console.WriteLine(e)
-//    Task.Run listenerLoop |> ignore
-
-//let socketRecovery() =
-//    while true do
-//        Thread.Sleep 1000
-//        if DateTime.UtcNow - lastMsg > TimeSpan.FromSeconds 30.0 then
-//            initSocket()
-//            lastMsg <- DateTime.MaxValue
-
 do
     Task.Run listenerLoop |> ignore
-    //initSocket()
-    //Task.Run socketRecovery |> ignore

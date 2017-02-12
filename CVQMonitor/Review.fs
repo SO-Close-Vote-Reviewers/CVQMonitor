@@ -9,11 +9,11 @@ type Review (reviewID : int, reviewerID : int) =
     let mutable reviewerName = ""
     let mutable timestamp = DateTime.MinValue
     let mutable action = ReviewAction.Close
-    let mutable auditPassed = new Nullable<bool> ()
-    let mutable tags = new List<string> ()
+    let mutable auditPassed = new Nullable<bool>()
+    let mutable tags = new List<string>()
 
     do
-        let reviewUrl = reviewBaseUrl + reviewID.ToString ()
+        let reviewUrl = reviewBaseUrl + reviewID.ToString()
         let req = new RestRequest (reviewUrl, Method.POST)
         req.AddParameter ("taskTypeId", "2") |> ignore
         req.AddParameter ("fkey", FkeyCollector.Fkey) |> ignore
@@ -27,7 +27,6 @@ type Review (reviewID : int, reviewerID : int) =
             action <- act
             auditPassed <- ReviewParser.AuditPassed resultsHtml
             tags <- ReviewParser.GetPostTags postHtml
-        ()
 
     member this.ID = reviewID
     member this.ReviewerID = reviewerID

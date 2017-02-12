@@ -38,7 +38,7 @@ let private wait multiplier =
     |> queueProcessorMre.WaitOne
     |> ignore
 
-let private getNextQueuedItem () =
+let private getNextQueuedItem() =
     match requestQueue.Count with
     | 1 ->
         let key = requestQueue.Keys |> Seq.head
@@ -60,17 +60,18 @@ let rec private sendRequest (req : RestRequest) attempt =
     let baseUrl = reqUri.Scheme + "://" + reqUri.Host
     let client = new RestClient (baseUrl)
     req.Resource <- reqUri.PathAndQuery
-    let mutable response = new RestResponse ()
+    let mutable response = new RestResponse()
     try
         response <- client.Execute(req) :?> RestResponse
     with
     | ex ->
         if response.ErrorException <> ex then
             response.ErrorException <- ex
-    let responseCode = (int response.StatusCode).ToString ()
+    let responseCode = (int response.StatusCode).ToString()
     if responseCode.StartsWith "5" then
         if attempt < 3 then
             wait 3.333
+            req.Resource <- reqUri.OriginalString
             response <- attempt + 1 |> sendRequest req
     response
 
@@ -78,7 +79,7 @@ let private processQueue () =
     while true do
         wait 1.0
         if not requestQueue.IsEmpty then
-            let kv = getNextQueuedItem ()
+            let kv = getNextQueuedItem()
             let req = snd kv |> fst
             let callback = snd kv |> snd
             let response = sendRequest req 0
