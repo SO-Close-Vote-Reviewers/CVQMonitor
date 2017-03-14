@@ -39,14 +39,12 @@ let listenerLoop = async {
             let socket = new ClientWebSocket()
             socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
             socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
-            Console.WriteLine(Counter.Get() + "WebSocket connected.")
             while socket = null |> not && socket.State = WebSocketState.Open do
                 let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
                 let responseResult =
                     socket.ReceiveAsync(bf, CancellationToken.None)
                     |> Async.AwaitTask
                     |> Async.RunSynchronously
-                Console.WriteLine(Counter.Get() + "WebSocket message received. " + responseResult.MessageType.ToString())
                 let sendPong =
                     match responseResult with
                     | _ as r when r.Count > 0 ->
@@ -62,6 +60,7 @@ let listenerLoop = async {
         with
         | _ as e when e.InnerException = null |> not && e.InnerException.InnerException = null |> not && e.InnerException.InnerException :? SocketException && (e.InnerException.InnerException :?> SocketException).ErrorCode = 10053 -> ()
         | :? OperationCanceledException -> ()
+        | :? ObjectDisposedException -> ()
         | _ as e ->
             Console.WriteLine(e)
         Thread.Sleep 5000
