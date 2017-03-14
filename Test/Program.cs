@@ -15,11 +15,20 @@ namespace Test
             var client = new ChatExchangeDotNet.Client("", "");
             var room = client.JoinRoom("https://chat.stackoverflow.com/rooms/68414/socvr-testing-facility", true);
 
+            Console.WriteLine("Joined chat.");
+
             Task.Run(() =>
             {
-                var user1 = new User(2246344); // Me
-                var user2 = new User(3956566); // Yvette Colomb
-                var user3 = new User(2756409); // TylerH
+                try
+                {
+                    var user1 = new User(2246344); // Me
+                    var user2 = new User(3956566); // Yvette Colomb
+                    var user3 = new User(2756409); // TylerH
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
 
                 while (true)
                 {
