@@ -40,13 +40,13 @@ let listenerLoop = async {
             socket.ConnectAsync(endpoint, CancellationToken.None).Wait()
             socket.SendAsync(onOpenMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
             Console.WriteLine(Counter.Get() + "WebSocket connected.")
-            while socket.State = WebSocketState.Open do
+            while socket = null |> not && socket.State = WebSocketState.Open do
                 let bf = ArraySegment(Array.zeroCreate<byte>(1024 * 10))
                 let responseResult =
                     socket.ReceiveAsync(bf, CancellationToken.None)
                     |> Async.AwaitTask
                     |> Async.RunSynchronously
-                Console.WriteLine(Counter.Get() + "WebSocket message received.")
+                Console.WriteLine(Counter.Get() + "WebSocket message received. " + responseResult.MessageType.ToString())
                 let sendPong =
                     match responseResult with
                     | _ as r when r.Count > 0 ->
