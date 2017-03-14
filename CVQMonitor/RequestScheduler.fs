@@ -7,7 +7,7 @@ open System.Threading
 open System.Threading.Tasks
 open RestSharp
 
-let private requestQueue = new ConcurrentDictionary<int, RestRequest * (RestResponse -> unit)> ()
+let private requestQueue = new ConcurrentDictionary<int, RestRequest * (RestResponse -> unit)>()
 let private queueProcessorMre = new ManualResetEvent false
 
 let mutable RequestsPerMinute = 60.0
@@ -25,9 +25,9 @@ let internal ProcessRequest (req : RestRequest) =
         req,
         fun res ->
             response <- res
-            waitMre.Set () |> ignore
+            waitMre.Set() |> ignore
     )
-    waitMre.WaitOne () |> ignore
+    waitMre.WaitOne() |> ignore
     response
 
 let private wait multiplier = 
@@ -56,9 +56,9 @@ let private getNextQueuedItem() =
         (key, value)
 
 let rec private sendRequest (req : RestRequest) attempt =
-    let reqUri = new Uri (req.Resource)
+    let reqUri = new Uri(req.Resource)
     let baseUrl = reqUri.Scheme + "://" + reqUri.Host
-    let client = new RestClient (baseUrl)
+    let client = new RestClient(baseUrl)
     req.Resource <- reqUri.PathAndQuery
     let mutable response = new RestResponse()
     try
@@ -75,7 +75,7 @@ let rec private sendRequest (req : RestRequest) attempt =
             response <- attempt + 1 |> sendRequest req
     response
 
-let private processQueue () =
+let private processQueue() =
     while true do
         wait 1.0
         if not requestQueue.IsEmpty then
@@ -87,7 +87,6 @@ let private processQueue () =
             fst kv
             |> requestQueue.TryRemove
             |> ignore
-    ()
 
 do
     Task.Run processQueue |> ignore

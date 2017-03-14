@@ -14,9 +14,9 @@ type Review (reviewID : int, reviewerID : int) =
 
     do
         let reviewUrl = reviewBaseUrl + reviewID.ToString()
-        let req = new RestRequest (reviewUrl, Method.POST)
-        req.AddParameter ("taskTypeId", "2") |> ignore
-        req.AddParameter ("fkey", FkeyCollector.Fkey) |> ignore
+        let req = new RestRequest(reviewUrl, Method.POST)
+        req.AddParameter("taskTypeId", "2") |> ignore
+        req.AddParameter("fkey", FkeyCollector.Fkey) |> ignore
         let res = RequestScheduler.ProcessRequest req
         if String.IsNullOrWhiteSpace res.Content |> not then
             let resultsHtml = Json.GetField res.Content "instructions" |> Json.EscapeData
@@ -27,6 +27,7 @@ type Review (reviewID : int, reviewerID : int) =
             action <- act
             auditPassed <- ReviewParser.AuditPassed resultsHtml
             tags <- ReviewParser.GetPostTags postHtml
+            Console.WriteLine(Counter.Get() + "Fetched review " + reviewID.ToString());
 
     member this.ID = reviewID
     member this.ReviewerID = reviewerID

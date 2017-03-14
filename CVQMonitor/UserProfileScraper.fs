@@ -9,10 +9,10 @@ let private baseReviewHistoryTabUrl = "http://stackoverflow.com/ajax/users/tab/$
 let private baseReviewCountUrl = "http://stackoverflow.com/review/user-info/2/$USERID$"
 let private baseUserProfileUrl = "https://stackoverflow.com/users/$USERID$"
 let private regOpts = RegexOptions.Compiled ||| RegexOptions.CultureInvariant
-let private reviewItemReg = new Regex ("""(?is)<tr\s+?class=""\s+?data-postid="\d+">.*?</tr>""", regOpts)
-let private timestampReg = new Regex ("""(?is)<div\s+?class="date(_brick)?"\s+?title="([0-9-:Z ]+)">""", regOpts)
-let private reviewIDReg = new Regex ("""(?is)<a\s+?href="\/review\/close\/(\d+?)"\s+?class="reviewed-action">""", regOpts)
-let private reviewCountReg = new Regex ("""today\s+?(\d+)""", regOpts)
+let private reviewItemReg = new Regex("""(?is)<tr\s+?class=""\s+?data-postid="\d+">.*?</tr>""", regOpts)
+let private timestampReg = new Regex("""(?is)<div\s+?class="date(_brick)?"\s+?title="([0-9-:Z ]+)">""", regOpts)
+let private reviewIDReg = new Regex("""(?is)<a\s+?href="\/review\/close\/(\d+?)"\s+?class="reviewed-action">""", regOpts)
+let private reviewCountReg = new Regex("""today\s+?(\d+)""", regOpts)
 
 let GetReviewsByPage (userID : int) (pageNo : int) =
     let mutable url = baseReviewHistoryTabUrl
@@ -30,6 +30,7 @@ let GetReviewsByPage (userID : int) (pageNo : int) =
                 let revTime = timestampReg.Match revItem.Value
                 let time = (DateTime.Parse revTime.Groups.[2].Value).ToUniversalTime()
                 revs.Add(id, time)
+    Console.WriteLine(Counter.Get() + "Fetched reviews by page for " + userID.ToString() + " @ " + pageNo.ToString())
     revs
 
 let GetCloseVoteReviewsToday (userID : int) =
@@ -44,22 +45,26 @@ let GetCloseVoteReviewsToday (userID : int) =
             elif (snd rev).Date < DateTime.UtcNow.Date then
                 reviewsToday <- false
         currentPage <- currentPage + 1
+    Console.WriteLine(Counter.Get() + "Fetched today's reviews for " + userID.ToString())
     revs
 
 let GetTodayReviewCount userID =
-    let url = baseReviewCountUrl.Replace("$USERID$", userID.ToString ())
+    let url = baseReviewCountUrl.Replace("$USERID$", userID.ToString())
     let req = new RestRequest(url, Method.GET)
     let res = RequestScheduler.ProcessRequest req
     if String.IsNullOrWhiteSpace res.Content then
+        Console.WriteLine(Counter.Get() + "**FAILED** to get review count for " + userID.ToString())
         0
     else
         let m = reviewCountReg.Match res.Content
+        Console.WriteLine(Counter.Get() + "Fetched review count for " + userID.ToString())
         Int32.Parse m.Groups.[1].Value
 
 let IsModerator userID =
-    let url = baseUserProfileUrl.Replace("$USERID$", userID.ToString ())
+    let url = baseUserProfileUrl.Replace("$USERID$", userID.ToString())
     let req = new RestRequest(url, Method.GET)
     let res = RequestScheduler.ProcessRequest req
+    Console.WriteLine(Counter.Get() + "Checked if " + userID.ToString() + " is a mod")
     if String.IsNullOrWhiteSpace res.Content then
         false
     else

@@ -3,6 +3,8 @@
 open System
 open System.Text.RegularExpressions
 
+// Evil I know...
+
 let GetField json name =
     if String.IsNullOrWhiteSpace json then
         ""

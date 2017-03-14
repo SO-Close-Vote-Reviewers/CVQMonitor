@@ -1,9 +1,10 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using CVQMonitor;
+using System.Threading.Tasks;
+using System.Threading;
 
 namespace Test
 {
@@ -11,16 +12,50 @@ namespace Test
     {
         static void Main(string[] args)
         {
-            var user = new User(2246344);
+            var client = new ChatExchangeDotNet.Client("", "");
+            var room = client.JoinRoom("https://chat.stackoverflow.com/rooms/68414/socvr-testing-facility", true);
 
-            user.ItemReviewed += (o, e) => Console.WriteLine($"Item {e.Item2.ID} reviewed");
-            user.ReviewingStarted += (o, e) => Console.WriteLine("Started");
-            user.ReviewLimitReached += (o, e) => Console.WriteLine("Finished");
-
-            while (true)
+            Task.Run(() =>
             {
-                System.Threading.Thread.Sleep(1000);
+                var user1 = new User(2246344); // Me
+                var user2 = new User(3956566); // Yvette Colomb
+                var user3 = new User(2756409); // TylerH
+
+                while (true)
+                {
+                    Thread.Sleep(1000);
+                }
+            });
+
+            var lastLine = "";
+
+            using (var strm = new StringWriter())
+            {
+                Console.SetOut(strm);
+                while (true)
+                {
+                    Thread.Sleep(5000);
+                    var lines = strm.ToString().Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+                    var msg = "";
+                    foreach (var line in lines)
+                    {
+                        if (!lastLine.StartsWith(":") || !line.StartsWith(":") || !line.Split(':')[1].All(Char.IsDigit) || int.Parse(lastLine.Split(':')[1]) < int.Parse(line.Split(':')[1]))
+                        {
+                            if (line.StartsWith(":"))
+                            {
+                                lastLine = line;
+                            }
+                            msg += line + "\n";
+                        }
+                    }
+                    if (!string.IsNullOrWhiteSpace(msg))
+                    {
+                        room.PostMessageLight(msg);
+                    }
+                }
             }
+            
         }
     }
 }

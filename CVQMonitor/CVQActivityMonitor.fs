@@ -33,7 +33,7 @@ let private handleMessage (msg : String) =
         false
     | _ -> false
 
-let listenerLoop() =
+let listenerLoop = async {
     while true do
         try
             let socket = new ClientWebSocket()
@@ -63,6 +63,7 @@ let listenerLoop() =
         | _ as e ->
             Console.WriteLine(e)
         Thread.Sleep 5000
+    }
 
 do
-    Task.Run listenerLoop |> ignore
+    listenerLoop |> Async.Start
