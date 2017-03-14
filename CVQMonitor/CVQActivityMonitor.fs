@@ -58,11 +58,12 @@ let listenerLoop = async {
                 if sendPong then
                     socket.SendAsync(pongMsg, WebSocketMessageType.Text, true, CancellationToken.None).Wait()
         with
-        | _ as e when e.InnerException = null |> not && e.InnerException.InnerException = null |> not && e.InnerException.InnerException :? SocketException && (e.InnerException.InnerException :?> SocketException).ErrorCode = 10053 -> ()
-        | :? OperationCanceledException -> ()
-        | :? ObjectDisposedException -> ()
-        | _ as e ->
-            Console.WriteLine(e)
+        | _ as e when e.InnerException = null |> not ->
+            match e with
+            | _ as ee when ee.InnerException = null |> not && ee.InnerException :? SocketException && (ee.InnerException :?> SocketException).ErrorCode = 10053 -> ()
+            | :? ObjectDisposedException -> ()
+            | _ -> Console.WriteLine(e)
+        | _ as e -> Console.WriteLine(e)
         Thread.Sleep 5000
     }
 
