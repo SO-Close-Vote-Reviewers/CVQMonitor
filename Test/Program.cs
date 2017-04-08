@@ -14,9 +14,10 @@ namespace Test
         {
             RequestScheduler.RequestsPerMinute = 30;
 
-            var user1 = new User(2246344); // Me
-            var user2 = new User(3956566); // Yvette Colomb
-            var user3 = new User(2756409); // TylerH
+            var user = new User(2246344);
+            user.ItemReviewed += (o, e) => Console.WriteLine(e.Item2.ID + " reviewed");
+            user.ReviewingStarted += (o, e) => Console.WriteLine("reviewing started");
+            user.ReviewLimitReached += (o, e) => Console.WriteLine("limit reached");
 
             while (true)
             {

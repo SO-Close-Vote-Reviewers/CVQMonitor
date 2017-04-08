@@ -52,7 +52,6 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
-    <Compile Include="Counter.fs" />
     <Compile Include="Json.fs" />
     <Compile Include="RequestScheduler.fs" />
     <Compile Include="AssemblyInfo.fs" />

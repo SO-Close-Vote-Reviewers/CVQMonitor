@@ -27,7 +27,6 @@ type Review (reviewID : int, reviewerID : int) =
             action <- act
             auditPassed <- ReviewParser.AuditPassed resultsHtml
             tags <- ReviewParser.GetPostTags postHtml
-            Console.WriteLine(Counter.Get() + "Fetched review " + reviewID.ToString());
 
     member this.ID = reviewID
     member this.ReviewerID = reviewerID
